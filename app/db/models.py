@@ -8,7 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
-# Embedding dimension is provisional (BGE-M3), pending the Phase 1 model choice.
+# BGE-M3 locked in 2026-07-10 after a cross-lingual retrieval check (see
+# app/nlp/embeddings.py docstring). Dimension confirmed at 1024.
 EMBEDDING_DIM = 1024
 
 
@@ -120,7 +121,11 @@ class Faq(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
     question: Mapped[str] = mapped_column(Text)
-    answer: Mapped[str] = mapped_column(Text)
+    # per-language reply text, e.g. {"uz": "...", "ru": "..."} - matching is
+    # cross-lingual (one embedding of `question` regardless of its
+    # language), but the reply shown to the customer should be in their
+    # own language. See app/faq/retrieval.py for the language fallback.
+    response_config: Mapped[dict] = mapped_column(JSONB)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 

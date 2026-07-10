@@ -1,0 +1,41 @@
+# Example merchant flow config. Human-editable, loaded via:
+#   uv run python -m scripts.load_flows --merchant-id <id> --file examples/flows.example.yaml
+#
+# Keywords are matched as case-insensitive substrings against the already
+# normalized inbound text, so include both Latin Uzbek and Cyrillic Russian
+# variants for the same intent - normalize() transliterates Cyrillic Uzbek to
+# Latin but deliberately leaves genuine Russian in Cyrillic (see
+# app/nlp/transliteration.py).
+
+flows:
+  - name: greeting
+    trigger_type: keyword
+    keywords:
+      - "salom"
+      - "assalomu alaykum"
+      - "здравствуйте"
+      - "привет"
+    response:
+      type: text
+      text: "Assalomu alaykum! Sizga qanday yordam bera olaman?"
+
+  - name: human_handoff
+    trigger_type: keyword
+    keywords:
+      - "odam bilan"
+      - "operator"
+      - "человеком"
+      - "поговорить"
+    response:
+      type: text
+      text: "Hozir operatorlarimizdan biriga ulanamiz, biroz kuting."
+
+  - name: thanks
+    trigger_type: keyword
+    keywords:
+      - "rahmat"
+      - "spasibo"
+      - "спасибо"
+    response:
+      type: text
+      text: "Arzimaydi! Yana savollaringiz bo'lsa, yozing."

@@ -12,6 +12,17 @@ dependencies = [
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.14.2",
     "redis>=8.0.1",
+    "sentence-transformers>=5.6.0",
     "sqlalchemy>=2.0.51",
     "uvicorn[standard]>=0.51.0",
+    "uztransliterator>=0.0.36",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pyyaml>=6.0.3",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

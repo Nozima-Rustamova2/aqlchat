@@ -1,4 +1,5 @@
 import hmac
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -7,7 +8,13 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Conversation, Customer, Merchant, Message
 from app.db.session import get_db
+from app.faq.retrieval import match_faq
+from app.flows.executor import match_flow
+from app.nlp.transliteration import normalize
+from app.telegram.client import TelegramClient
 from app.telegram.schemas import TelegramUpdate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 
@@ -64,15 +71,57 @@ def receive_update(
     conversation = _get_or_create_conversation(db, merchant.id, customer.id)
 
     msg_type = "photo" if message.photo else "text"
-    db.add(
-        Message(
-            conversation_id=conversation.id,
-            direction="in",
-            type=msg_type,
-            raw_text=message.text,
-            raw_update=update.model_dump(mode="json", by_alias=True),
-        )
+
+    normalized_text: str | None = None
+    detected_language: str | None = None
+    reply_text: str | None = None
+    response_source: str | None = None
+    match_confidence: float | None = None
+
+    if msg_type == "text" and message.text:
+        result = normalize(message.text)
+        normalized_text = result.normalized_text
+        detected_language = result.detected_language
+
+        matched_flow = match_flow(db, merchant.id, normalized_text)
+        if matched_flow is not None:
+            reply_text = matched_flow.response_config["text"]
+            response_source = "rule"
+        else:
+            faq_match = match_faq(db, merchant.id, normalized_text, detected_language)
+            if faq_match is not None:
+                reply_text = faq_match.reply_text
+                response_source = "faq"
+                match_confidence = faq_match.similarity
+
+    inbound = Message(
+        conversation_id=conversation.id,
+        direction="in",
+        type=msg_type,
+        raw_text=message.text,
+        detected_language=detected_language,
+        normalized_text=normalized_text,
+        response_source=response_source,
+        match_confidence=match_confidence,
+        raw_update=update.model_dump(mode="json", by_alias=True),
     )
+    db.add(inbound)
+
+    if reply_text is not None:
+        try:
+            TelegramClient(merchant.telegram_bot_token).send_message(message.chat.id, reply_text)
+        except Exception:
+            logger.exception("failed to send Telegram reply for merchant %s", merchant.id)
+        db.add(
+            Message(
+                conversation_id=conversation.id,
+                direction="out",
+                type="text",
+                raw_text=reply_text,
+                response_source=response_source,
+            )
+        )
+
     db.commit()
 
     return {"ok": True}

@@ -1,0 +1,23 @@
+# Example merchant FAQ config. Human-editable, loaded via:
+#   uv run python -m scripts.load_faqs --merchant-id <id> --file examples/faqs.example.yaml
+#
+# `question` only needs to be written once, in whichever language the
+# merchant prefers - matching is cross-lingual (see app/faq/retrieval.py).
+# `responses` should still cover both languages you expect customers to
+# write in, since the reply is shown back in the customer's own language.
+
+faqs:
+  - question: "Yetkazib berish qancha vaqt oladi?"
+    responses:
+      uz: "Yetkazib berish odatda 1-3 ish kuni ichida amalga oshiriladi."
+      ru: "Доставка обычно занимает 1-3 рабочих дня."
+
+  - question: "Toʻlovni qanday amalga oshiraman?"
+    responses:
+      uz: "Toʻlovni Payme, Click yoki naqd pul orqali amalga oshirishingiz mumkin."
+      ru: "Оплатить можно через Payme, Click или наличными."
+
+  - question: "Mahsulotni qaytarish mumkinmi?"
+    responses:
+      uz: "Ha, mahsulotni 14 kun ichida original holatida qaytarishingiz mumkin."
+      ru: "Да, товар можно вернуть в течение 14 дней в исходном состоянии."

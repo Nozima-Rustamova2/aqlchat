@@ -1,0 +1,409 @@
+# Fixed ground-truth test set: real-world-style Uzbek/Russian e-commerce chat messages.
+#
+# Purpose: a SHARED fixture used to validate every stage of the text pipeline
+# (normalizer, language ID, intent classifier, FAQ retrieval) against the same
+# ground truth, instead of each component being spot-checked in isolation.
+#
+# These are hand-authored to be representative of real Central Asian e-commerce
+# chat, not scraped from a live merchant (no such data exists yet). Update this
+# file as real pilot conversations reveal patterns these examples miss.
+#
+# Fields:
+#   id                  - stable identifier, referenced by component-specific tests
+#   raw_text            - the message as a customer would actually type it
+#   script              - uz_latin | uz_cyrillic | ru | mixed_script (mixed within the message/word)
+#   languages_present    - list of languages actually present (uz, ru)
+#   gloss_en            - rough English translation, for humans reading this fixture
+#   intent_category      - rough bucket: greeting | price_inquiry | availability |
+#                          delivery | order_status | payment | human_handoff |
+#                          complaint | thanks | visual_search_prompt
+#   notes                - what this example is specifically stressing (informal
+#                          spelling, dropped diacritics, code-switch, keyboard-driven
+#                          mid-word script mixing, etc.)
+#
+# expected_normalized_text is intentionally NOT set yet - the normalization
+# approach (char-mapping table vs. morphological analyzer) is still being decided
+# by the transliteration research spike. Fill it in once that's locked.
+
+examples:
+  - id: greet_01
+    raw_text: "Assalomu alaykum"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "Peace be upon you (standard greeting)"
+    intent_category: greeting
+    notes: clean standard Uzbek Latin, no diacritics involved
+
+  - id: greet_02
+    raw_text: "Салом"
+    script: uz_cyrillic
+    languages_present: [uz]
+    gloss_en: "Hi"
+    intent_category: greeting
+    notes: casual Cyrillic greeting, very common short form
+
+  - id: greet_03
+    raw_text: "Здравствуйте"
+    script: ru
+    languages_present: [ru]
+    gloss_en: "Hello (formal)"
+    intent_category: greeting
+    notes: pure Russian, formal register
+
+  - id: greet_04
+    raw_text: "Salom, qandaysiz?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "Hi, how are you?"
+    intent_category: greeting
+    notes: casual conversational opener, often precedes the real question
+
+  - id: price_01
+    raw_text: "Bu mahsulotning narxi qancha?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "What is the price of this product?"
+    intent_category: price_inquiry
+    notes: clean standard Uzbek Latin with correct diacritics
+
+  - id: price_02
+    raw_text: "Kofta narxi qancha bolsa?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "What's the price of the sweater?"
+    intent_category: price_inquiry
+    notes: "dropped diacritic: 'bo'lsa' typed as 'bolsa' (missing oʻ) - extremely common on phone keyboards"
+
+  - id: price_03
+    raw_text: "Нархи қанча?"
+    script: uz_cyrillic
+    languages_present: [uz]
+    gloss_en: "What's the price?"
+    intent_category: price_inquiry
+    notes: clean Uzbek Cyrillic
+
+  - id: price_04
+    raw_text: "Сколько стоит эта куртка?"
+    script: ru
+    languages_present: [ru]
+    gloss_en: "How much does this jacket cost?"
+    intent_category: price_inquiry
+    notes: pure Russian
+
+  - id: price_05
+    raw_text: "Narxi qancha, dostavka bor mi?"
+    script: uz_latin
+    languages_present: [uz, ru]
+    gloss_en: "What's the price, is delivery available?"
+    intent_category: price_inquiry
+    notes: "code-switch: 'dostavka' is a Russian loanword embedded in an Uzbek sentence, written in Latin script - very common pattern"
+
+  - id: price_06
+    raw_text: "Qancha turadi bu, скидка bormi?"
+    script: mixed_script
+    transliteration_expectation: partial
+    languages_present: [uz, ru]
+    gloss_en: "How much is this, is there a discount?"
+    intent_category: price_inquiry
+    notes: >
+      mid-message script switch: Uzbek in Latin, then the Russian word 'скидка'
+      (discount) typed in Cyrillic within the same sentence. "скидка" has no
+      exclusive-letter or stopword signal, so it's genuinely ambiguous and is
+      left untransliterated (conservative default - see short_06/short_07 for
+      why guessing "ambiguous single word = loanword" was rejected)
+
+  - id: price_07
+    raw_text: "1 500 000 so'm turadimi yoki chegirma bormi?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "Does it cost 1,500,000 so'm, or is there a discount?"
+    intent_category: price_inquiry
+    notes: numeric price formatting with spaces as thousands separators, plus correct oʻ usage
+
+  - id: avail_01
+    raw_text: "Bu rangda bormi?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "Is it available in this color?"
+    intent_category: availability
+    notes: clean Uzbek Latin
+
+  - id: avail_02
+    raw_text: "Бу мавжудми?"
+    script: uz_cyrillic
+    languages_present: [uz]
+    gloss_en: "Is this in stock?"
+    intent_category: availability
+    notes: clean Uzbek Cyrillic
+
+  - id: avail_03
+    raw_text: "Есть в наличии?"
+    script: ru
+    languages_present: [ru]
+    gloss_en: "Is it in stock?"
+    intent_category: availability
+    notes: pure Russian, extremely common exact phrase
+
+  - id: avail_04
+    raw_text: "42 razmer bor mi?"
+    script: uz_latin
+    languages_present: [uz, ru]
+    gloss_en: "Do you have size 42?"
+    intent_category: availability
+    notes: "'razmer' (size) is a Russian loanword almost universally used instead of the Uzbek word, even by Uzbek-dominant speakers"
+
+  - id: delivery_01
+    raw_text: "Toshkentga yetkazib berasizlarmi?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "Do you deliver to Tashkent?"
+    intent_category: delivery
+    notes: clean Uzbek Latin, formal verb conjugation
+
+  - id: delivery_02
+    raw_text: "Доставка есть по Ташкенту?"
+    script: ru
+    languages_present: [ru]
+    gloss_en: "Is there delivery within Tashkent?"
+    intent_category: delivery
+    notes: pure Russian
+
+  - id: delivery_03
+    raw_text: "Dostavka qancha turadi?"
+    script: uz_latin
+    languages_present: [uz, ru]
+    gloss_en: "How much does delivery cost?"
+    intent_category: delivery
+    notes: "'dostavka' Russian loanword fully assimilated into casual Uzbek, written in Latin script"
+
+  - id: order_status_01
+    raw_text: "Buyurtmam qachon keladi?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "When will my order arrive?"
+    intent_category: order_status
+    notes: clean Uzbek Latin
+
+  - id: order_status_02
+    raw_text: "Где мой заказ?"
+    script: ru
+    languages_present: [ru]
+    gloss_en: "Where is my order?"
+    intent_category: order_status
+    notes: pure Russian, very common terse phrasing
+
+  - id: order_status_03
+    raw_text: "Zakaz qildim, hali kelmadi"
+    script: uz_latin
+    languages_present: [uz, ru]
+    gloss_en: "I placed an order, it hasn't arrived yet"
+    intent_category: order_status
+    notes: "'zakaz' (order) Russian loanword used instead of Uzbek 'buyurtma' - both forms occur in real chat, must both map to the same intent"
+
+  - id: payment_01
+    raw_text: "Pul o'tkazdim, chek yuboraman"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "I transferred the money, I'll send the receipt"
+    intent_category: payment
+    notes: correct oʻ diacritic usage, tests that the normalizer doesn't mangle it
+
+  - id: payment_02
+    raw_text: "Я оплатил, отправляю чек"
+    script: ru
+    languages_present: [ru]
+    gloss_en: "I paid, sending the receipt"
+    intent_category: payment
+    notes: pure Russian
+
+  - id: payment_03
+    raw_text: "Opla qildim, tasdiqlang"
+    script: uz_latin
+    languages_present: [uz, ru]
+    gloss_en: "I made the payment, please confirm"
+    intent_category: payment
+    notes: "'opla' is a clipped/nativized form of Russian 'оплата' (payment), common informal usage not found in any dictionary"
+
+  - id: handoff_01
+    raw_text: "Odam bilan gaplashsam bo'ladimi?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "Can I speak with a person?"
+    intent_category: human_handoff
+    notes: clean Uzbek Latin
+
+  - id: handoff_02
+    raw_text: "Можно поговорить с человеком?"
+    script: ru
+    languages_present: [ru]
+    gloss_en: "Can I talk to a human?"
+    intent_category: human_handoff
+    notes: pure Russian
+
+  - id: complaint_01
+    raw_text: "Mahsulot sifatsiz keldi, pulimni qaytaring"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "The product arrived low quality, refund my money"
+    intent_category: complaint
+    notes: clean Uzbek Latin, no diacritics needed in this one
+
+  - id: complaint_02
+    raw_text: "Товар пришел бракованный, хочу вернуть деньги"
+    script: ru
+    languages_present: [ru]
+    gloss_en: "The item arrived defective, I want a refund"
+    intent_category: complaint
+    notes: pure Russian
+
+  - id: thanks_01
+    raw_text: "Раҳмат, яхши кун"
+    script: uz_cyrillic
+    languages_present: [uz]
+    gloss_en: "Thanks, have a good day"
+    intent_category: thanks
+    notes: clean Uzbek Cyrillic including ҳ character
+
+  - id: thanks_02
+    raw_text: "rahmat 🙏 tez orada kutaman"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "thanks 🙏 I'll be waiting soon"
+    intent_category: thanks
+    notes: lowercase casual texting style with an emoji embedded mid-message
+
+  - id: visual_search_01
+    raw_text: "shu kabi mahsulot bormi?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "do you have a product like this?"
+    intent_category: visual_search_prompt
+    notes: typical caption accompanying a photo message in Phase 2's image search flow
+
+  - id: keyboard_glitch_01
+    raw_text: "salom нarxi qanaqa"
+    script: mixed_script
+    transliteration_expectation: full
+    languages_present: [uz]
+    gloss_en: "hi, what's the price like"
+    intent_category: price_inquiry
+    notes: >
+      accidental mid-word script mixing from switching keyboard layouts on a phone
+      (Cyrillic 'н' typed into an otherwise-Latin word 'нarxi' instead of 'narxi') -
+      real phones produce this, and it's a much harder normalization case than a
+      clean single-script message
+
+  - id: short_01
+    raw_text: "Narxi?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "Price?"
+    intent_category: price_inquiry
+    notes: single-word fragment, typical of real terse chat traffic - stresses short-text classification
+
+  - id: short_02
+    raw_text: "Bor mi?"
+    script: uz_latin
+    languages_present: [uz]
+    gloss_en: "Is it available?"
+    intent_category: availability
+    notes: two-word fragment, no punctuation
+
+  - id: short_03
+    raw_text: "Қанча?"
+    script: uz_cyrillic
+    languages_present: [uz]
+    gloss_en: "How much?"
+    intent_category: price_inquiry
+    notes: single-word Cyrillic fragment, caught by the exclusive-letter signal (қ) even though it's this short
+
+  - id: short_04
+    raw_text: "Сколько?"
+    script: ru
+    languages_present: [ru]
+    gloss_en: "How much?"
+    intent_category: price_inquiry
+    notes: single-word Russian fragment, no exclusive Uzbek letters, caught by the Russian stopword list ("сколько") - confidently Russian, must NOT fall into the ambiguous-single-token-defaults-to-transliterate path
+
+  - id: short_05
+    raw_text: "Чек?"
+    script: cyrillic_ambiguous
+    languages_present: [uz, ru]
+    gloss_en: "Receipt?"
+    intent_category: payment
+    notes: >
+      genuinely ambiguous single Cyrillic word - "чек" (receipt/check) is used
+      identically in both Uzbek and Russian, no exclusive letters, not in either
+      stopword list. Left untransliterated under the conservative ambiguous
+      default (see short_06/short_07 for why a length-based "single word =
+      loanword" tiebreak was tried and rejected).
+
+  - id: short_06
+    raw_text: "Дорого"
+    script: cyrillic_ambiguous
+    languages_present: [ru]
+    gloss_en: "Expensive"
+    intent_category: price_inquiry
+    notes: >
+      ADVERSARIAL case that broke an earlier version of this module: a genuine
+      standalone Russian word ("expensive"), not a loanword, not in the RU
+      stopword list, no exclusive letters. An earlier "ambiguous + single
+      token = treat as loanword, transliterate" rule mangled this into
+      "Dorogo" - meaningless pseudo-Latin. Must be left untouched.
+
+  - id: short_07
+    raw_text: "Понятно"
+    script: cyrillic_ambiguous
+    languages_present: [ru]
+    gloss_en: "Got it / understood"
+    intent_category: thanks
+    notes: >
+      same adversarial pattern as short_06 - short standalone Russian word
+      with no stopword-list coverage, must stay untransliterated rather than
+      being guessed at as a loanword.
+
+  - id: clause_switch_01
+    raw_text: "salom, у вас есть размер M?"
+    script: mixed_script
+    transliteration_expectation: partial
+    languages_present: [uz, ru]
+    gloss_en: "hi, do you have size M?"
+    intent_category: availability
+    notes: >
+      genuine clause-level code-switching, not a single embedded loanword like
+      price_06/delivery_03 - the Cyrillic portion is a full, well-formed multi-word
+      Russian clause ("у вас есть размер"), not an Uzbek sentence borrowing one
+      Russian word. Blanket transliterating the whole Cyrillic span the way a
+      single-loanword case does would phonetically mangle real Russian
+      ("u vas yest razmer") into something matching neither Latin Uzbek nor
+      Cyrillic Russian FAQ/catalog content - this is the case that requires
+      per-run (not per-message) classification granularity.
+
+  - id: clause_switch_02
+    raw_text: "Здравствуйте, narxi qancha?"
+    script: mixed_script
+    transliteration_expectation: partial
+    languages_present: [uz, ru]
+    gloss_en: "Hello, what's the price?"
+    intent_category: greeting
+    notes: >
+      the reverse pattern - Russian greeting clause followed by an Uzbek question.
+      The Russian run ("Здравствуйте") should be left untouched while the Latin
+      Uzbek run passes through unchanged.
+
+  - id: known_gap_romanized_russian
+    raw_text: "salom u vas est razmer M bormi"
+    script: uz_latin
+    known_gap: true
+    languages_present: [uz, ru]
+    gloss_en: "hi, do you have size M (Russian 'u vas est razmer' romanized into Latin)"
+    intent_category: availability
+    notes: >
+      DOCUMENTED KNOWN GAP, not a passing case: "u vas est razmer" is Russian
+      ("у вас есть размер") typed in Latin script instead of Cyrillic. Script
+      detection has zero signal here - this is indistinguishable from genuine
+      Uzbek Latin text and passes through completely undetected as Russian.
+      Rests on an unverified assumption that customers overwhelmingly type
+      Russian in Cyrillic rather than romanizing it. See transliteration.py
+      module docstring. Do not delete this case when it "fails" - it's here
+      to keep the gap visible, not to be silently fixed by accident.
