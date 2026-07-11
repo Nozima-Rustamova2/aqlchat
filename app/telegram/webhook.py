@@ -10,7 +10,7 @@ from app.db.models import Conversation, Customer, Merchant, Message
 from app.db.session import get_db
 from app.faq.retrieval import match_faq
 from app.flows.executor import match_flow
-from app.handoff.service import escalate, escalation_reply_text, forward_to_admin, handle_admin_command
+from app.handoff.service import escalate, escalation_reply_text, forward_to_admin
 from app.image_search import ordinal
 from app.image_search.carousel import handle_callback_query, handle_photo_message
 from app.intent.classifier import classify_intent
@@ -52,14 +52,14 @@ def _get_or_create_conversation(db: Session, merchant_id: uuid.UUID, customer_id
     return conversation
 
 
-@router.post("/webhook/{merchant_id}")
+@router.post("/webhook/tenant/{webhook_slug}")
 def receive_update(
-    merchant_id: uuid.UUID,
+    webhook_slug: str,
     update: TelegramUpdate,
     x_telegram_bot_api_secret_token: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    merchant = db.get(Merchant, merchant_id)
+    merchant = db.scalar(select(Merchant).where(Merchant.webhook_slug == webhook_slug))
     if merchant is None:
         raise HTTPException(status_code=404, detail="unknown merchant")
 
@@ -87,19 +87,6 @@ def receive_update(
 
     message = update.message
 
-    # The merchant's own chat with their bot doubles as their admin
-    # channel (see app/handoff/service.py) - never runs through the
-    # customer pipeline below.
-    if merchant.admin_chat_id is not None and message.chat.id == merchant.admin_chat_id and message.text:
-        result = handle_admin_command(db, merchant, message.text)
-        db.commit()
-        if result is not None:
-            try:
-                TelegramClient(merchant.telegram_bot_token).send_message(message.chat.id, result.confirmation_text)
-            except Exception:
-                logger.exception("failed to send admin confirmation for merchant %s", merchant.id)
-        return {"ok": True}
-
     customer = _get_or_create_customer(db, merchant.id, message.from_.id)
     conversation = _get_or_create_conversation(db, merchant.id, customer.id)
 
@@ -109,7 +96,7 @@ def receive_update(
     # layer below and let the merchant handle it directly via /reply.
     if conversation.needs_human:
         if message.text:
-            forward_to_admin(merchant, customer, message.text)
+            forward_to_admin(db, merchant, customer, message.text)
         db.add(
             Message(
                 conversation_id=conversation.id,

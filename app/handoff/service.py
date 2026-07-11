@@ -6,17 +6,17 @@ doesn't try to answer at all - it hands the conversation to a human. See
 the aqlchat-phase1-plan memory for why this was added: without it, a miss
 at every automated layer left the customer at a dead end.
 
-Minimal Phase 1 implementation, no dashboard yet: the merchant's own bot
-doubles as their admin channel. A merchant registers their personal
-Telegram chat as merchants.admin_chat_id, and handles escalated
-conversations with two commands sent in that chat:
+Admin interaction goes through the shared platform bot, not the tenant
+bot (see app/onboarding/ for how a Telegram identity becomes a
+MerchantAdmin). A registered admin handles escalated conversations with
+two commands sent to the platform bot:
 
     /reply <telegram_user_id> <message>   - relay a message to that customer
     /release <telegram_user_id>           - hand the conversation back to the bot
 
 While a conversation's needs_human flag is set, the webhook suppresses all
 automated replies on that thread and forwards every customer message to
-the admin chat instead - see app/telegram/webhook.py.
+every registered admin instead - see app/telegram/webhook.py.
 """
 
 import logging
@@ -26,7 +26,8 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Conversation, Customer, Merchant, Message
+from app.config import settings
+from app.db.models import Conversation, Customer, Merchant, MerchantAdmin, Message
 from app.telegram.client import TelegramClient
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,10 @@ def escalation_reply_text(detected_language: str | None) -> str:
     return _ESCALATION_REPLY.get(detected_language, _ESCALATION_REPLY[_DEFAULT_LANGUAGE])
 
 
+def _merchant_admins(db: Session, merchant_id: uuid.UUID) -> list[MerchantAdmin]:
+    return list(db.scalars(select(MerchantAdmin).where(MerchantAdmin.merchant_id == merchant_id)))
+
+
 def escalate(
     db: Session,
     merchant: Merchant,
@@ -52,15 +57,16 @@ def escalate(
     trigger_text: str,
     reason: str,
 ) -> None:
-    """Marks the conversation as needing a human and, if the merchant has
-    registered an admin chat, notifies them there. Safe to call without
-    admin_chat_id configured - the conversation still gets suppressed,
-    just without a real-time nudge to the merchant."""
+    """Marks the conversation as needing a human and notifies every
+    registered admin via the platform bot. Safe to call with no
+    merchant_admins registered - the conversation still gets suppressed,
+    just without a real-time nudge to anyone."""
     conversation.needs_human = True
     db.add(conversation)
 
-    if merchant.admin_chat_id is None:
-        logger.warning("merchant %s has no admin_chat_id - escalation has no notification", merchant.id)
+    admins = _merchant_admins(db, merchant.id)
+    if not admins:
+        logger.warning("merchant %s has no registered admins - escalation has no notification", merchant.id)
         return
 
     notification = (
@@ -69,23 +75,26 @@ def escalate(
         f"Reply: /reply {customer.telegram_user_id} <message>\n"
         f"Done: /release {customer.telegram_user_id}"
     )
-    _notify_admin(merchant, notification)
+    for admin in admins:
+        _notify_admin(admin.telegram_user_id, notification)
 
 
-def forward_to_admin(merchant: Merchant, customer: Customer, text: str) -> None:
+def forward_to_admin(db: Session, merchant: Merchant, customer: Customer, text: str) -> None:
     """Relays a further customer message while a conversation is already
-    in needs_human state, so the merchant can actually follow what the
-    customer is saying rather than handling it blind."""
-    if merchant.admin_chat_id is None:
-        return
-    _notify_admin(merchant, f"Customer {customer.telegram_user_id}:\n{text}")
+    in needs_human state, so admins can actually follow what the customer
+    is saying rather than handling it blind."""
+    for admin in _merchant_admins(db, merchant.id):
+        _notify_admin(admin.telegram_user_id, f"Customer {customer.telegram_user_id}:\n{text}")
 
 
-def _notify_admin(merchant: Merchant, text: str) -> None:
+def _notify_admin(telegram_user_id: int, text: str) -> None:
+    """Never raises - an admin who hasn't /start'd the platform bot yet
+    gets a 403 from Telegram on every send, same failure shape as a bad
+    tenant token today: logged, swallowed, pipeline keeps going."""
     try:
-        TelegramClient(merchant.telegram_bot_token).send_message(merchant.admin_chat_id, text)
+        TelegramClient(settings.platform_bot_token).send_message(telegram_user_id, text)
     except Exception:
-        logger.exception("failed to notify admin chat for merchant %s", merchant.id)
+        logger.exception("failed to notify admin %s", telegram_user_id)
 
 
 @dataclass

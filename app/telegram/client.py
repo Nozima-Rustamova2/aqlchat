@@ -52,6 +52,18 @@ class TelegramClient:
         response.raise_for_status()
         return response.json()
 
+    def delete_message(self, chat_id: int, message_id: int) -> dict:
+        payload = {"chat_id": chat_id, "message_id": message_id}
+        response = httpx.post(f"{self._base_url}/deleteMessage", json=payload, timeout=10)
+        response.raise_for_status()
+        return response.json()
+
+    def set_webhook(self, url: str, secret_token: str) -> dict:
+        payload = {"url": url, "secret_token": secret_token}
+        response = httpx.post(f"{self._base_url}/setWebhook", json=payload, timeout=10)
+        response.raise_for_status()
+        return response.json()
+
     def download_photo(self, file_id: str) -> bytes:
         """Resolves a Telegram file_id to bytes via getFile + the separate
         file-download host (a different base path than the Bot API

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.db.models import Faq, Flow, Merchant, Product
+from app.db.models import Faq, Flow, Merchant, MerchantAdmin, Product
 from app.db.session import SessionLocal
 from app.nlp.embeddings import embed_text
 
@@ -39,6 +39,13 @@ def test_merchant(db_session):
     db_session.flush()
     yield merchant
     db_session.rollback()
+
+
+def make_merchant_admin(db_session, merchant_id, telegram_user_id: int) -> MerchantAdmin:
+    admin = MerchantAdmin(merchant_id=merchant_id, telegram_user_id=telegram_user_id)
+    db_session.add(admin)
+    db_session.flush()
+    return admin
 
 
 def make_flow(db_session, merchant_id, name: str, keywords: list[str], reply_text: str) -> Flow:
