@@ -1,11 +1,19 @@
 """Orchestrates the LLM fallback layer: cache check -> budget check ->
 provider call -> replay logging. Returns None whenever this layer has
-nothing safe to say - a cache miss plus exhausted budget, or the provider
-itself saying "not answerable" - so the caller (app/telegram/webhook.py)
-falls through to layer 5 human handoff. This layer never invents a reply;
-it either has a grounded one or it doesn't.
+nothing safe to say - a cache miss plus exhausted budget, the provider
+itself saying "not answerable", or the provider call failing outright
+(auth misconfiguration, network error, rate limit, timeout, anything) -
+so the caller (app/telegram/webhook.py) falls through to layer 5 human
+handoff. This layer never invents a reply, and it must never let a
+provider failure crash the webhook request either - a customer message
+going unanswered because Claude's API had a hiccup is exactly the kind of
+silent dead end Layer 5 exists to prevent. Found live 2026-07-12: a
+missing ANTHROPIC_API_KEY in this dev environment raised uncaught out of
+_provider.generate(), 500ing the whole webhook request instead of
+degrading to handoff.
 """
 
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -18,6 +26,8 @@ from app.llm.claude_provider import ClaudeProvider
 from app.llm.context import build_context
 from app.llm.fallback import LLMProvider
 from app.llm.redis_client import get_redis
+
+logger = logging.getLogger(__name__)
 
 _provider: LLMProvider = ClaudeProvider()
 
@@ -45,7 +55,22 @@ def get_fallback_reply(
         return None
 
     context = build_context(db, merchant_id, normalized_text, detected_language)
-    result = _provider.generate(context)
+    try:
+        result = _provider.generate(context)
+    except Exception:
+        logger.exception("LLM fallback provider call failed for merchant %s", merchant_id)
+        db.add(
+            LlmFallbackLog(
+                merchant_id=merchant_id,
+                conversation_id=conversation_id,
+                query=normalized_text,
+                context_snapshot={"faqs": context.faqs, "products": context.products},
+                provider_name="error",
+                answerable=False,
+                answer=None,
+            )
+        )
+        return None
 
     db.add(
         LlmFallbackLog(

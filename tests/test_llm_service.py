@@ -88,6 +88,43 @@ def test_not_answerable_result_is_logged_for_replay(monkeypatch, db_session, tes
     assert log.provider_name == "stub"
 
 
+def test_provider_exception_falls_through_instead_of_raising(monkeypatch, db_session, test_merchant):
+    # Found live 2026-07-12: a real webhook request 500'd because the
+    # provider raised (missing API credentials) and nothing caught it.
+    # The fallback layer must degrade to "no answer" - same as
+    # answerable=False - not propagate the exception to the caller.
+    from app.db.models import Conversation, Customer
+
+    class _RaisingProvider:
+        def generate(self, context):
+            raise RuntimeError("simulated provider failure (e.g. auth/network/rate-limit)")
+
+    monkeypatch.setattr(llm_service, "_provider", _RaisingProvider())
+
+    customer = Customer(merchant_id=test_merchant.id, telegram_user_id=424243)
+    db_session.add(customer)
+    db_session.flush()
+    conversation = Conversation(merchant_id=test_merchant.id, customer_id=customer.id)
+    db_session.add(conversation)
+    db_session.flush()
+
+    reply = llm_service.get_fallback_reply(
+        db_session, test_merchant.id, customer.id, conversation.id, "provider failure test query", "uz"
+    )
+
+    assert reply is None
+
+    db_session.flush()
+    log = db_session.scalar(
+        select(LlmFallbackLog).where(
+            LlmFallbackLog.merchant_id == test_merchant.id, LlmFallbackLog.query == "provider failure test query"
+        )
+    )
+    assert log is not None
+    assert log.answerable is False
+    assert log.provider_name == "error"
+
+
 def test_budget_exhausted_returns_none_without_calling_provider(monkeypatch, db_session, test_merchant):
     stub = _use_stub_provider(
         monkeypatch, FallbackResult(answerable=True, answer="should not be reached", provider_name="stub")
