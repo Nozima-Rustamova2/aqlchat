@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,6 +28,11 @@ class Merchant(Base):
     name: Mapped[str] = mapped_column(String(255))
     telegram_bot_token: Mapped[str] = mapped_column(String(255), unique=True)
     webhook_secret: Mapped[str] = mapped_column(String(255))
+    # The merchant's own Telegram chat with their bot, used for the layer-5
+    # human handoff (app/handoff/) - notifications and /reply, /release
+    # commands go here. Nullable: a merchant hasn't necessarily registered
+    # as their own admin yet.
+    admin_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     products: Mapped[list["Product"]] = relationship(back_populates="merchant")
@@ -59,7 +64,11 @@ class Customer(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
-    telegram_user_id: Mapped[int] = mapped_column(index=True)
+    # BigInteger, not the default 32-bit Integer: real Telegram user ids
+    # already exceed Postgres's int32 range (2,147,483,647) for newer
+    # accounts. Fixed alongside the related admin_chat_id addition below,
+    # which would have had the same bug if left as a plain Integer.
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     preferred_language: Mapped[str | None] = mapped_column(String(8), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
@@ -73,6 +82,10 @@ class Conversation(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
     customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    # Layer 5 (app/handoff/): while True, the pipeline suppresses all
+    # automated replies on this thread - the merchant is handling it
+    # directly via /reply in their admin chat. Cleared by /release.
+    needs_human: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     merchant: Mapped["Merchant"] = relationship(back_populates="conversations")
@@ -93,12 +106,34 @@ class Message(Base):
     intent: Mapped[str | None] = mapped_column(String(64), nullable=True)
     matched_product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id"), nullable=True)
     match_confidence: Mapped[float | None] = mapped_column(nullable=True)
-    # which layer produced the reply: "rule" | "faq" | "intent" | "llm" | None (inbound / no match)
+    # which layer produced the reply: "rule" | "faq" | "intent" | "llm" |
+    # "handoff" (layer 5's own "passed to the seller" message) | "human"
+    # (the merchant's own /reply, relayed verbatim) | None (inbound / no match)
     response_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     raw_update: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
+
+
+class LlmFallbackLog(Base):
+    """One row per LLM fallback call (not per cache hit) - captures the
+    exact context given to the model alongside its answer, specifically so
+    the deferred provider bake-off can be run later as a replay against
+    real misses instead of a synthetic test set. See app/llm/service.py.
+    """
+
+    __tablename__ = "llm_fallback_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("conversations.id"), nullable=True)
+    query: Mapped[str] = mapped_column(Text)
+    context_snapshot: Mapped[dict] = mapped_column(JSONB)
+    provider_name: Mapped[str] = mapped_column(String(64))
+    answerable: Mapped[bool] = mapped_column()
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
 
 
 class Flow(Base):

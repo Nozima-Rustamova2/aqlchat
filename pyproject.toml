@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.5",
+    "anthropic>=0.116.0",
     "fastapi>=0.139.0",
     "httpx>=0.28.1",
     "pgvector>=0.5.0",
@@ -20,8 +21,12 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "datasets>=5.0.0",
+    "pillow>=12.3.0",
+    "protobuf>=7.35.1",
     "pytest>=9.1.1",
     "pyyaml>=6.0.3",
+    "sentencepiece>=0.2.1",
 ]
 
 [tool.pytest.ini_options]
