@@ -12,6 +12,13 @@ from app.db.base import Base
 # app/nlp/embeddings.py docstring). Dimension confirmed at 1024.
 EMBEDDING_DIM = 1024
 
+# SigLIP locked in 2026-07-11 after a CLIP-vs-SigLIP retrieval-quality
+# spike (see app/image_search/embeddings.py docstring). Dimension
+# confirmed at 768 via google/siglip-base-patch16-224's
+# vision_config.hidden_size - distinct from EMBEDDING_DIM above, which is
+# BGE-M3's text dimension.
+IMAGE_EMBEDDING_DIM = 768
+
 
 def _uuid() -> uuid.UUID:
     return uuid.uuid4()
@@ -52,7 +59,7 @@ class Product(Base):
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    image_embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
+    image_embedding: Mapped[list[float] | None] = mapped_column(Vector(IMAGE_EMBEDDING_DIM), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     merchant: Mapped["Merchant"] = relationship(back_populates="products")
@@ -86,6 +93,13 @@ class Conversation(Base):
     # automated replies on this thread - the merchant is handling it
     # directly via /reply in their admin chat. Cleared by /release.
     needs_human: Mapped[bool] = mapped_column(default=False)
+    # Small, structured state - not a general-purpose dumping ground.
+    # {"last_candidates": [{"product_id": ..., "rank": 1}, ...],
+    #  "last_matched_product_id": ...} - written by the image-search
+    # carousel (app/image_search/) so a later text follow-up ("ikkinchisi
+    # narxi qancha?") can resolve an ordinal reference, and by a
+    # confirmed carousel tap. See app/image_search/ordinal.py.
+    context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     merchant: Mapped["Merchant"] = relationship(back_populates="conversations")
@@ -133,6 +147,29 @@ class LlmFallbackLog(Base):
     provider_name: Mapped[str] = mapped_column(String(64))
     answerable: Mapped[bool] = mapped_column()
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
+class ImageMatchLog(Base):
+    """One row per photo query - captures the full top-10 similarity
+    scores (not just the top-3 shown to the customer) plus the
+    confirmation outcome, so a real per-merchant match floor can be
+    calibrated from pilot data instead of guessed. The floor used at
+    query time (app/image_search/retrieval.py FLOOR) is deliberately not
+    safety-critical in v1 - the customer's confirm/"none of these" tap is
+    the real gate. See app/image_search/ and the aqlchat-phase1-plan
+    memory for the full reasoning.
+    """
+
+    __tablename__ = "image_match_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id"))
+    top_candidates: Mapped[list] = mapped_column(JSONB)  # [{"product_id": ..., "similarity": ...}, ...] up to 10
+    floor_applied: Mapped[bool] = mapped_column(default=False)
+    confirmed_product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    none_tapped: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
 

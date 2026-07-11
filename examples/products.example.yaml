@@ -1,0 +1,22 @@
+# Example merchant product catalog. Human-editable, loaded via:
+#   uv run python -m scripts.load_products --merchant-id <id> --file examples/products.example.yaml
+#
+# image_path is relative to this file's directory. Photos here are real
+# product photos (from the same public retrieval-benchmark source used
+# for the Phase 2 spike, not the deleted spike dataset itself) - useful
+# for verifying the embedding/search plumbing works end-to-end, but not a
+# substitute for the "re-spike against reality" step once a real pilot
+# merchant's catalog exists (see aqlchat-phase1-plan memory).
+
+products:
+  - name: "Mahsulot A"
+    price: 150000
+    currency: "UZS"
+    description: "Namuna mahsulot A"
+    image_path: "product_photos/product_a_1.jpg"
+
+  - name: "Mahsulot B"
+    price: 220000
+    currency: "UZS"
+    description: "Namuna mahsulot B"
+    image_path: "product_photos/product_b_1.jpg"

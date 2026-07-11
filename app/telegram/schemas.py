@@ -33,6 +33,16 @@ class TelegramMessage(BaseModel):
     photo: list[TelegramPhotoSize] | None = None
 
 
+class TelegramCallbackQuery(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    id: str
+    from_: TelegramUser = Field(alias="from")
+    message: TelegramMessage | None = None
+    data: str | None = None
+
+
 class TelegramUpdate(BaseModel):
     update_id: int
     message: TelegramMessage | None = None
+    callback_query: TelegramCallbackQuery | None = None

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.db.models import Faq, Flow, Merchant
+from app.db.models import Faq, Flow, Merchant, Product
 from app.db.session import SessionLocal
 from app.nlp.embeddings import embed_text
 
@@ -64,3 +64,19 @@ def make_faq(db_session, merchant_id, question: str, responses: dict[str, str]) 
     db_session.add(faq)
     db_session.flush()
     return faq
+
+
+def make_product(
+    db_session, merchant_id, name: str, image_embedding: list[float], price=None, currency=None, description=None
+) -> Product:
+    product = Product(
+        merchant_id=merchant_id,
+        name=name,
+        price=price,
+        currency=currency,
+        description=description,
+        image_embedding=image_embedding,
+    )
+    db_session.add(product)
+    db_session.flush()
+    return product

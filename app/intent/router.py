@@ -63,6 +63,16 @@ def route_intent(
     return None
 
 
+def format_product_reply(product: Product) -> str:
+    """Shared product-info formatting - also used by the image-search
+    carousel confirmation and ordinal-reference resolution
+    (app/image_search/), so a merchant's product details read the same
+    however the customer found the product (typed name, photo, or "the
+    second one")."""
+    price_line = f"{product.price} {product.currency}" if product.price is not None else ""
+    return "\n".join(part for part in (product.name, price_line, product.description) if part)
+
+
 def _route_product_inquiry(
     db: Session, merchant_id: uuid.UUID, normalized_text: str, similarity: float
 ) -> RoutedReply | None:
@@ -73,7 +83,4 @@ def _route_product_inquiry(
     if len(matches) != 1:
         return None
 
-    product = matches[0]
-    price_line = f"{product.price} {product.currency}" if product.price is not None else ""
-    reply_text = "\n".join(part for part in (product.name, price_line, product.description) if part)
-    return RoutedReply(reply_text=reply_text, similarity=similarity)
+    return RoutedReply(reply_text=format_product_reply(matches[0]), similarity=similarity)
