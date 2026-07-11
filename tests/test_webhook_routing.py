@@ -1,65 +1,10 @@
 """Webhook requests go through the real FastAPI route, which calls
-db.commit() for real inside app/telegram/webhook.py - unlike every other
-test in this suite, which calls service functions directly against a
-session that's only ever flushed and rolled back. The plain db_session
-fixture's rollback-only teardown can't contain a real commit, so this
-file wraps each test in its own connection + SAVEPOINT: the webhook's
-internal commit() only releases the savepoint, and the outer transaction
-rollback at teardown undoes everything for real. Standard SQLAlchemy
-"join a session into an external transaction" pattern - see
-https://docs.sqlalchemy.org/en/20/orm/session_transaction.html#joining-a-session-into-an-external-transaction-such-as-for-test-suites
+db.commit() for real - see the routed_session/routed_merchant/client
+fixtures in tests/conftest.py for why these tests need their own
+SAVEPOINT-based session instead of the plain db_session fixture.
 """
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import event
-from sqlalchemy.orm import Session
-
-from app.db.models import Customer, Merchant, MerchantAdmin
-from app.db.session import engine, get_db
-from app.main import app
-
-
-@pytest.fixture
-def routed_session():
-    connection = engine.connect()
-    trans = connection.begin()
-    session = Session(bind=connection)
-    session.begin_nested()
-
-    @event.listens_for(session, "after_transaction_end")
-    def _restart_savepoint(sess, transaction):
-        if transaction.nested and not transaction._parent.nested:
-            sess.begin_nested()
-
-    def _override_get_db():
-        yield session
-
-    app.dependency_overrides[get_db] = _override_get_db
-    try:
-        yield session
-    finally:
-        app.dependency_overrides.pop(get_db, None)
-        session.close()
-        trans.rollback()
-        connection.close()
-
-
-@pytest.fixture
-def routed_merchant(routed_session) -> Merchant:
-    merchant = Merchant(
-        name="webhook-routing-test-merchant",
-        telegram_bot_token=f"pytest-webhook-{id(object())}",
-        webhook_secret="pytest-webhook-secret",
-    )
-    routed_session.add(merchant)
-    routed_session.flush()
-    return merchant
-
-
-@pytest.fixture
-def client(routed_session) -> TestClient:
-    return TestClient(app)
+from app.db.models import Customer, MerchantAdmin
 
 
 def _text_update(update_id: int, chat_id: int, user_id: int, text: str) -> dict:
