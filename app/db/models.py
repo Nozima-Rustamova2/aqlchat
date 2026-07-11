@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -7,6 +8,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.crypto import EncryptedString
 
 # BGE-M3 locked in 2026-07-10 after a cross-lingual retrieval check (see
 # app/nlp/embeddings.py docstring). Dimension confirmed at 1024.
@@ -33,13 +35,33 @@ class Merchant(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     name: Mapped[str] = mapped_column(String(255))
-    telegram_bot_token: Mapped[str] = mapped_column(String(255), unique=True)
+    # Encrypted at rest (app/db/crypto.py) - the ORM attribute is still a
+    # plain Python str everywhere it's read/written, only the DB column
+    # holds ciphertext. NOT unique: Fernet is randomized (fresh IV per
+    # call), so encrypting the same token twice produces different
+    # ciphertext - a DB-level unique constraint here would silently stop
+    # enforcing "this bot isn't already registered". telegram_bot_id
+    # below is the real uniqueness key.
+    telegram_bot_token: Mapped[str] = mapped_column(EncryptedString)
+    # The bot's own numeric Telegram ID (from getMe during onboarding
+    # token validation - see app/onboarding/service.py). Not sensitive,
+    # not encrypted, immutable - the actual uniqueness key for "is this
+    # bot already registered as a tenant". Nullable because
+    # scripts/seed_merchant.py can seed a merchant with a fake token
+    # (intentional, for tests) that never resolves via a real getMe call.
+    telegram_bot_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
+    # Random identifier used in the tenant webhook URL
+    # (/telegram/webhook/tenant/{webhook_slug}), decoupled from the
+    # merchant's real primary key so it can be rotated independently.
+    webhook_slug: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, default=lambda: secrets.token_urlsafe(24)
+    )
     webhook_secret: Mapped[str] = mapped_column(String(255))
-    # The merchant's own Telegram chat with their bot, used for the layer-5
-    # human handoff (app/handoff/) - notifications and /reply, /release
-    # commands go here. Nullable: a merchant hasn't necessarily registered
-    # as their own admin yet.
-    admin_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Set during onboarding (app/onboarding/service.py) - clothing /
+    # cosmetics / other for now. Nullable: not collected before that
+    # onboarding step completes, and older merchants seeded manually
+    # won't have one.
+    vertical: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     products: Mapped[list["Product"]] = relationship(back_populates="merchant")
@@ -47,6 +69,50 @@ class Merchant(Base):
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="merchant")
     flows: Mapped[list["Flow"]] = relationship(back_populates="merchant")
     faqs: Mapped[list["Faq"]] = relationship(back_populates="merchant")
+    admins: Mapped[list["MerchantAdmin"]] = relationship(back_populates="merchant")
+
+
+class MerchantAdmin(Base):
+    """Who receives Layer-5 escalations and may issue /reply, /release for
+    a merchant - replaces the old merchants.admin_chat_id single-field
+    design now that admin interaction moved to the shared platform bot
+    (app/onboarding/, app/handoff/service.py), not the tenant bot.
+
+    telegram_user_id is unique across the WHOLE table, not just per
+    merchant: one Telegram identity administers exactly one merchant in
+    v1. This is what makes `/reply <customer_id> <text>` unambiguous in
+    the platform bot - the merchant is resolved purely from who's
+    texting, with no merchant id in the command syntax. Relaxing this
+    later (multi-business admins) means dropping the constraint, not
+    restructuring the command parser.
+    """
+
+    __tablename__ = "merchant_admins"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+    merchant: Mapped["Merchant"] = relationship(back_populates="admins")
+
+
+class PlatformOnboardingSession(Base):
+    """Crude per-chat state machine for self-serve onboarding through the
+    platform bot (app/onboarding/service.py) - no framework, just a state
+    string. States: start -> awaiting_token -> choosing_vertical -> done.
+    Keyed by telegram_user_id since onboarding always happens in a private
+    DM with the platform bot (chat.id == user.id there).
+    """
+
+    __tablename__ = "platform_onboarding_sessions"
+
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    state: Mapped[str] = mapped_column(String(32), default="start")
+    language: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    merchant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("merchants.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
 
 class Product(Base):
