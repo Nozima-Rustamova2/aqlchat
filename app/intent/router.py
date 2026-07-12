@@ -69,7 +69,12 @@ def format_product_reply(product: Product) -> str:
     (app/image_search/), so a merchant's product details read the same
     however the customer found the product (typed name, photo, or "the
     second one")."""
-    price_line = f"{product.price} {product.currency}" if product.price is not None else ""
+    if product.price is None:
+        price_line = ""
+    elif product.currency:
+        price_line = f"{product.price} {product.currency}"
+    else:
+        price_line = str(product.price)
     return "\n".join(part for part in (product.name, price_line, product.description) if part)
 
 

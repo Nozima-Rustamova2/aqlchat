@@ -10,6 +10,12 @@ or bury it among unrelated numbers (a phone number, a size, a quantity) -
 parse_price() returns None rather than guessing in that case; missing
 price is a first-class product state (Product.price_status), not
 something this module should paper over.
+
+Currency is tracked, not assumed: a caption reading "price: 40$" is not
+the same product state as "narxi: 40000 so'm", and silently defaulting
+every parsed number to so'm would misprice anything quoted in another
+currency by a huge margin (found via live testing - a real "$40" caption
+was being stored as if it meant 40 so'm before this).
 """
 
 import re
@@ -23,6 +29,7 @@ _PHONE_LIKE = re.compile(r"(?:\+?998[\s\-]?)?\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]
 
 _PRICE_LABEL = r"(?:narx(?:i)?|цена|price)\s*[:\-]?\s*"
 _CURRENCY_WORD = r"(?:so'm|so‘m|som|sum|сум|uzs)"
+_USD_MARKER = r"(?:\$|usd|dollar)"
 
 # An explicit label first - "narxi: 250000" is unambiguous even as a bare
 # unformatted number, since nothing else in a caption would be labeled
@@ -37,16 +44,31 @@ _PATTERN_GROUPED = re.compile(
 _PATTERN_K = re.compile(r"(?P<number>\d+(?:[.,]\d+)?)\s*k\b", re.IGNORECASE)
 _PATTERN_MING = re.compile(r"(?P<number>\d+(?:[.,]\d+)?)\s*ming\b", re.IGNORECASE)
 
+# Checked immediately after wherever the number itself matched, plus a
+# whole-text fallback - "price: 40$" needs the tail check (the $ sits
+# right after "40"); "40 dollars delivery included" needs the fallback.
+_TAIL_WINDOW = 6
+
 
 def _digits_only(number_str: str) -> str:
     return re.sub(r"[^\d]", "", number_str)
 
 
-def parse_price(text: str) -> float | None:
-    """Returns the first price found in `text`, or None if nothing looks
-    like a price. Tried in priority order: an explicit "narxi:"-style
-    label, then a thousands-grouped number, then "250k" / "250 ming"
-    shorthand."""
+def _detect_currency(text: str, match_end: int) -> str:
+    tail = text[match_end : match_end + _TAIL_WINDOW]
+    if re.search(_USD_MARKER, tail, re.IGNORECASE) or re.search(_USD_MARKER, text, re.IGNORECASE):
+        return "USD"
+    # Uzbek merchant captions overwhelmingly price in so'm even when they
+    # don't spell out the currency word - that's the domain default here,
+    # not a guess made without basis (see the pivot plan's own examples).
+    return "UZS"
+
+
+def parse_price(text: str) -> tuple[float, str] | None:
+    """Returns (amount, currency_code) for the first price found in
+    `text`, or None if nothing looks like a price. Tried in priority
+    order: an explicit "narxi:"-style label, then a thousands-grouped
+    number, then "250k" / "250 ming" shorthand."""
     text = _PHONE_LIKE.sub(" ", text)
 
     match = _PATTERN_LABELED.search(text)
@@ -55,7 +77,7 @@ def parse_price(text: str) -> float | None:
         if digits:
             value = float(digits)
             if value > 0:
-                return value
+                return value, _detect_currency(text, match.end())
 
     match = _PATTERN_GROUPED.search(text)
     if match is not None:
@@ -63,7 +85,7 @@ def parse_price(text: str) -> float | None:
         if digits:
             value = float(digits)
             if value > 0:
-                return value
+                return value, _detect_currency(text, match.end())
 
     for pattern in (_PATTERN_K, _PATTERN_MING):
         match = pattern.search(text)
@@ -73,6 +95,6 @@ def parse_price(text: str) -> float | None:
             except ValueError:
                 continue
             if value > 0:
-                return value
+                return value, _detect_currency(text, match.end())
 
     return None

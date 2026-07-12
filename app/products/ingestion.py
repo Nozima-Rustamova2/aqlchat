@@ -71,9 +71,9 @@ def ingest_post(
         except Exception:
             logger.exception("failed to download/embed channel post photo for merchant %s", merchant.id)
 
-    price = parse_price(caption_or_text) if caption_or_text else None
-    if price is not None:
-        product.price = price
+    parsed_price = parse_price(caption_or_text) if caption_or_text else None
+    if parsed_price is not None:
+        product.price, product.currency = parsed_price
         product.price_status = "set"
     elif product.price_status is None:
         # Only set to "missing" on first ingest - an edited post whose
