@@ -65,6 +65,33 @@ def test_garbage_token_stays_in_awaiting_token(db_session):
     assert session.merchant_id is None
 
 
+def test_token_for_an_already_registered_bot_does_not_crash(db_session, test_merchant, monkeypatch):
+    # Found via live testing: pasting a token for a bot that already
+    # backs a Merchant (manually seeded, or a prior onboarding run) used
+    # to crash with an unhandled IntegrityError on telegram_bot_id's
+    # unique constraint instead of failing gracefully.
+    test_merchant.telegram_bot_id = 999888700
+    db_session.add(test_merchant)
+    db_session.flush()
+
+    monkeypatch.setattr(
+        service,
+        "_validate_token",
+        lambda token: {"id": 999888700, "first_name": "Already Registered Bot", "username": "already_bot"},
+    )
+
+    service.handle_start(db_session, 800099, chat_id=800099)
+    service.handle_platform_callback(db_session, 800099, chat_id=800099, callback_data="lang:uz")
+    service.handle_platform_message(db_session, 800099, chat_id=800099, message_id=1, text="already-registered-token")
+
+    session = db_session.get(PlatformOnboardingSession, 800099)
+    assert session.state == service.STATE_AWAITING_TOKEN
+    assert session.merchant_id is None
+
+    admin = db_session.query(MerchantAdmin).filter_by(telegram_user_id=800099).first()
+    assert admin is None
+
+
 def test_valid_token_creates_merchant_and_admin_and_advances_state(db_session, monkeypatch):
     monkeypatch.setattr(
         service,

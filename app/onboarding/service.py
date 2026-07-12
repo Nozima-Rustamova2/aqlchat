@@ -61,6 +61,10 @@ _INVALID_TOKEN = {
     "uz": "Bu token ishlamayapti. Qaytadan urinib ko'ring.",
     "ru": "Этот токен не работает. Попробуйте ещё раз.",
 }
+_TOKEN_ALREADY_REGISTERED = {
+    "uz": "Bu bot allaqachon ro'yxatdan o'tgan. Boshqa token yuboring.",
+    "ru": "Этот бот уже зарегистрирован. Отправьте другой токен.",
+}
 _CHOOSE_VERTICAL = {
     "uz": "Sohangizni tanlang:",
     "ru": "Выберите сферу деятельности:",
@@ -172,6 +176,16 @@ def _handle_token_text(
 
     if bot_info is None:
         _send(chat_id, _INVALID_TOKEN[language])
+        return
+
+    existing = db.scalar(select(Merchant).where(Merchant.telegram_bot_id == bot_info["id"]))
+    if existing is not None:
+        # Same bot already backs a merchant (manually seeded, or a prior
+        # onboarding run) - telegram_bot_id is the real uniqueness key
+        # (see app/db/models.py's Merchant docstring), so creating a
+        # second Merchant row for it would crash on that constraint.
+        # Stay in awaiting_token so a different token can be pasted.
+        _send(chat_id, _TOKEN_ALREADY_REGISTERED[language])
         return
 
     merchant = Merchant(
