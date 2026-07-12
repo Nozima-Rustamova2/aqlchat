@@ -1,5 +1,15 @@
-from app.db.models import Conversation, Customer
-from app.handoff.service import escalate, escalation_reply_text, handle_admin_command
+from datetime import datetime, timedelta, timezone
+
+from app.db.models import Conversation, Customer, PendingAdminReply
+from app.handoff.service import (
+    escalate,
+    escalation_reply_text,
+    forward_to_admin,
+    handle_admin_command,
+    release_conversation,
+    release_if_stale,
+)
+from app.telegram.client import TelegramClient
 from tests.conftest import make_merchant_admin
 
 
@@ -100,3 +110,119 @@ def test_admin_reply_to_known_customer_attempts_send(db_session, test_merchant):
 
     assert result is not None
     assert "Failed to send" in result.confirmation_text
+
+
+def test_escalate_notification_uses_first_name_and_quoted_text(db_session, test_merchant, monkeypatch):
+    captured = {}
+
+    def fake_send_message(self, chat_id, text, reply_markup=None):
+        captured["chat_id"] = chat_id
+        captured["text"] = text
+        captured["reply_markup"] = reply_markup
+        return {"result": {"message_id": 42}}
+
+    monkeypatch.setattr(TelegramClient, "send_message", fake_send_message)
+
+    make_merchant_admin(db_session, test_merchant.id, 555010)
+    customer = Customer(merchant_id=test_merchant.id, telegram_user_id=555011, first_name="Aziza")
+    db_session.add(customer)
+    db_session.flush()
+    conversation = Conversation(merchant_id=test_merchant.id, customer_id=customer.id)
+    db_session.add(conversation)
+    db_session.flush()
+
+    escalate(db_session, test_merchant, customer, conversation, "narxi qancha?", reason="unhandled")
+
+    assert captured["text"] == 'Aziza: "narxi qancha?"'
+    assert captured["reply_markup"]["inline_keyboard"][0][0]["text"] == "✅ Botga qaytarish"
+
+
+def test_escalate_notification_falls_back_to_telegram_id_without_first_name(db_session, test_merchant, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        TelegramClient,
+        "send_message",
+        lambda self, chat_id, text, reply_markup=None: captured.update(text=text) or {"result": {"message_id": 1}},
+    )
+
+    make_merchant_admin(db_session, test_merchant.id, 555012)
+    customer, conversation = _make_conversation(db_session, test_merchant.id, 555013)
+
+    escalate(db_session, test_merchant, customer, conversation, "hello", reason="unhandled")
+
+    assert captured["text"] == '555013: "hello"'
+
+
+def test_pending_admin_reply_threads_escalation_and_followups(db_session, test_merchant, monkeypatch):
+    message_ids = iter([100, 101])
+    monkeypatch.setattr(
+        TelegramClient,
+        "send_message",
+        lambda self, chat_id, text, reply_markup=None: {"result": {"message_id": next(message_ids)}},
+    )
+
+    admin = make_merchant_admin(db_session, test_merchant.id, 555020)
+    customer, conversation = _make_conversation(db_session, test_merchant.id, 555021)
+
+    escalate(db_session, test_merchant, customer, conversation, "birinchi savol", reason="unhandled")
+    forward_to_admin(db_session, test_merchant, customer, conversation, "ikkinchi savol")
+
+    pending = (
+        db_session.query(PendingAdminReply)
+        .filter_by(merchant_admin_id=admin.id, status="open")
+        .one()
+    )
+    assert pending.platform_message_ids == [100, 101]
+
+
+def test_release_conversation_closes_all_open_pending_rows(db_session, test_merchant, monkeypatch):
+    monkeypatch.setattr(
+        TelegramClient, "send_message", lambda self, *a, **k: {"result": {"message_id": 1}}
+    )
+    admin = make_merchant_admin(db_session, test_merchant.id, 555040)
+    customer, conversation = _make_conversation(db_session, test_merchant.id, 555041)
+    escalate(db_session, test_merchant, customer, conversation, "salom", reason="unhandled")
+    db_session.flush()
+
+    release_conversation(db_session, conversation)
+
+    assert conversation.needs_human is False
+    pending = db_session.query(PendingAdminReply).filter_by(merchant_admin_id=admin.id).one()
+    assert pending.status == "released"
+
+
+def test_release_if_stale_noop_when_conversation_not_needing_human(db_session, test_merchant):
+    customer, conversation = _make_conversation(db_session, test_merchant.id, 555050)
+    assert release_if_stale(db_session, conversation) is False
+
+
+def test_release_if_stale_does_not_release_within_window(db_session, test_merchant, monkeypatch):
+    monkeypatch.setattr(
+        TelegramClient, "send_message", lambda self, *a, **k: {"result": {"message_id": 1}}
+    )
+    make_merchant_admin(db_session, test_merchant.id, 555060)
+    customer, conversation = _make_conversation(db_session, test_merchant.id, 555061)
+    escalate(db_session, test_merchant, customer, conversation, "salom", reason="unhandled")
+
+    assert release_if_stale(db_session, conversation) is False
+    assert conversation.needs_human is True
+
+
+def test_release_if_stale_releases_after_timeout(db_session, test_merchant, monkeypatch):
+    monkeypatch.setattr(
+        TelegramClient, "send_message", lambda self, *a, **k: {"result": {"message_id": 1}}
+    )
+    admin = make_merchant_admin(db_session, test_merchant.id, 555070)
+    customer, conversation = _make_conversation(db_session, test_merchant.id, 555071)
+    escalate(db_session, test_merchant, customer, conversation, "salom", reason="unhandled")
+
+    pending = (
+        db_session.query(PendingAdminReply)
+        .filter_by(merchant_admin_id=admin.id, status="open")
+        .one()
+    )
+    pending.last_activity_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=31)
+    db_session.flush()
+
+    assert release_if_stale(db_session, conversation) is True
+    assert conversation.needs_human is False

@@ -20,8 +20,9 @@ the platform route.
 import pytest
 
 from app.config import settings
-from app.db.models import Merchant, MerchantAdmin, PlatformOnboardingSession
+from app.db.models import Conversation, Customer, Merchant, MerchantAdmin, PendingAdminReply, PlatformOnboardingSession
 from app.onboarding import service
+from app.telegram.client import TelegramClient
 from tests.conftest import make_merchant_admin
 
 
@@ -157,3 +158,160 @@ def test_platform_webhook_wrong_secret_returns_403(client, reply_update):
         headers={"X-Telegram-Bot-Api-Secret-Token": "wrong"},
     )
     assert response.status_code == 403
+
+
+def test_release_button_releases_the_conversation(client, routed_session, routed_merchant, monkeypatch):
+    monkeypatch.setattr(TelegramClient, "send_message", lambda self, *a, **k: {"result": {"message_id": 200}})
+
+    admin = MerchantAdmin(merchant_id=routed_merchant.id, telegram_user_id=800201)
+    routed_session.add(admin)
+    routed_session.flush()
+    customer = Customer(merchant_id=routed_merchant.id, telegram_user_id=800202)
+    routed_session.add(customer)
+    routed_session.flush()
+    conversation = Conversation(merchant_id=routed_merchant.id, customer_id=customer.id, needs_human=True)
+    routed_session.add(conversation)
+    routed_session.flush()
+    pending = PendingAdminReply(
+        merchant_admin_id=admin.id, kind="escalation", target_id=conversation.id, platform_message_ids=[200]
+    )
+    routed_session.add(pending)
+    routed_session.flush()
+
+    response = client.post(
+        "/telegram/webhook/platform",
+        json={
+            "update_id": 10,
+            "callback_query": {
+                "id": "cbq1",
+                "from": {"id": 800201, "is_bot": False, "first_name": "Admin"},
+                "message": {"message_id": 200, "date": 0, "chat": {"id": 800201, "type": "private"}},
+                "data": f"release:{pending.id}",
+            },
+        },
+        headers={"X-Telegram-Bot-Api-Secret-Token": settings.platform_webhook_secret},
+    )
+    assert response.status_code == 200
+    assert conversation.needs_human is False
+    assert pending.status == "released"
+
+
+def test_release_button_from_a_different_admin_is_ignored(client, routed_session, routed_merchant, monkeypatch):
+    monkeypatch.setattr(TelegramClient, "send_message", lambda self, *a, **k: {"result": {"message_id": 201}})
+
+    admin = MerchantAdmin(merchant_id=routed_merchant.id, telegram_user_id=800211)
+    routed_session.add(admin)
+    routed_session.flush()
+    customer = Customer(merchant_id=routed_merchant.id, telegram_user_id=800212)
+    routed_session.add(customer)
+    routed_session.flush()
+    conversation = Conversation(merchant_id=routed_merchant.id, customer_id=customer.id, needs_human=True)
+    routed_session.add(conversation)
+    routed_session.flush()
+    pending = PendingAdminReply(
+        merchant_admin_id=admin.id, kind="escalation", target_id=conversation.id, platform_message_ids=[201]
+    )
+    routed_session.add(pending)
+    routed_session.flush()
+
+    response = client.post(
+        "/telegram/webhook/platform",
+        json={
+            "update_id": 11,
+            "callback_query": {
+                "id": "cbq2",
+                # A different telegram_user_id than the pending row's own admin.
+                "from": {"id": 999999, "is_bot": False, "first_name": "Intruder"},
+                "message": {"message_id": 201, "date": 0, "chat": {"id": 999999, "type": "private"}},
+                "data": f"release:{pending.id}",
+            },
+        },
+        headers={"X-Telegram-Bot-Api-Secret-Token": settings.platform_webhook_secret},
+    )
+    assert response.status_code == 200
+    assert conversation.needs_human is True
+
+
+def test_reply_to_message_relays_to_customer_via_tenant_bot(client, routed_session, routed_merchant, monkeypatch):
+    sent = []
+
+    def fake_send_message(self, chat_id, text, reply_markup=None):
+        sent.append((chat_id, text))
+        return {"result": {"message_id": 300}}
+
+    monkeypatch.setattr(TelegramClient, "send_message", fake_send_message)
+
+    admin = MerchantAdmin(merchant_id=routed_merchant.id, telegram_user_id=800301)
+    routed_session.add(admin)
+    routed_session.flush()
+    customer = Customer(merchant_id=routed_merchant.id, telegram_user_id=800302)
+    routed_session.add(customer)
+    routed_session.flush()
+    conversation = Conversation(merchant_id=routed_merchant.id, customer_id=customer.id, needs_human=True)
+    routed_session.add(conversation)
+    routed_session.flush()
+    pending = PendingAdminReply(
+        merchant_admin_id=admin.id, kind="escalation", target_id=conversation.id, platform_message_ids=[301]
+    )
+    routed_session.add(pending)
+    routed_session.flush()
+
+    response = client.post(
+        "/telegram/webhook/platform",
+        json={
+            "update_id": 12,
+            "message": {
+                "message_id": 302,
+                "date": 0,
+                "chat": {"id": 800301, "type": "private"},
+                "from": {"id": 800301, "is_bot": False, "first_name": "Admin"},
+                "text": "Salom, narxi 250000 som",
+                "reply_to_message": {
+                    "message_id": 301,
+                    "date": 0,
+                    "chat": {"id": 800301, "type": "private"},
+                },
+            },
+        },
+        headers={"X-Telegram-Bot-Api-Secret-Token": settings.platform_webhook_secret},
+    )
+    assert response.status_code == 200
+    assert len(sent) == 1
+    assert sent[0] == (800302, "Salom, narxi 250000 som")
+
+
+def test_reply_to_an_untracked_message_falls_through_to_typed_fallback(
+    client, routed_session, routed_merchant, monkeypatch
+):
+    # Replying to a message that isn't any open PendingAdminReply's thread
+    # shouldn't silently vanish - it should fall through to the /reply,
+    # /release parser (which will report "not a recognized command" via
+    # returning None -> no confirmation, but importantly does NOT relay
+    # anything to a customer, since _handle_reply_to_message correctly
+    # declined to handle it).
+    monkeypatch.setattr(TelegramClient, "send_message", lambda self, *a, **k: {"result": {"message_id": 1}})
+
+    admin = MerchantAdmin(merchant_id=routed_merchant.id, telegram_user_id=800401)
+    routed_session.add(admin)
+    routed_session.flush()
+
+    response = client.post(
+        "/telegram/webhook/platform",
+        json={
+            "update_id": 13,
+            "message": {
+                "message_id": 402,
+                "date": 0,
+                "chat": {"id": 800401, "type": "private"},
+                "from": {"id": 800401, "is_bot": False, "first_name": "Admin"},
+                "text": "just a random reply",
+                "reply_to_message": {
+                    "message_id": 999,  # not tracked by any PendingAdminReply
+                    "date": 0,
+                    "chat": {"id": 800401, "type": "private"},
+                },
+            },
+        },
+        headers={"X-Telegram-Bot-Api-Secret-Token": settings.platform_webhook_secret},
+    )
+    assert response.status_code == 200

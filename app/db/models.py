@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, ForeignKey, Numeric, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -103,6 +103,39 @@ class MerchantAdmin(Base):
     merchant: Mapped["Merchant"] = relationship(back_populates="admins")
 
 
+class PendingAdminReply(Base):
+    """Tracks a thread of platform-bot notifications sent to ONE admin
+    about ONE target (a conversation being escalated, or a product
+    awaiting a price) so a later Telegram-reply from that admin can be
+    resolved back to what it's about (app/handoff/service.py). Scoped per
+    merchant_admin_id, not per merchant: message ids are only meaningful
+    within the replying admin's own chat with the platform bot, so if a
+    merchant has several admins, each gets their own independent row (and
+    their own independent thread) for the same target.
+
+    `kind` discriminates what `target_id` points at: "escalation" ->
+    conversations.id, "price_query" -> products.id. Deliberately one
+    table with a kind column rather than two separate tables - both are
+    the same "which admin message resolves to which target" problem.
+
+    `platform_message_ids` grows every time a new notification is sent
+    for this target (the original escalation, then every subsequent
+    customer follow-up while still open) so the admin can reply to *any*
+    message in the thread, not just the first.
+    """
+
+    __tablename__ = "pending_admin_replies"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    merchant_admin_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchant_admins.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    platform_message_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default=list)
+    status: Mapped[str] = mapped_column(String(16), default="open")
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+    last_activity_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+
 class PlatformOnboardingSession(Base):
     """Crude per-chat state machine for self-serve onboarding through the
     platform bot (app/onboarding/service.py) - no framework, just a state
@@ -167,6 +200,11 @@ class Customer(Base):
     # which would have had the same bug if left as a plain Integer.
     telegram_user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     preferred_language: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # Refreshed from TelegramUser.first_name on every inbound message
+    # (app/telegram/webhook.py) - needed so Layer-5 escalation
+    # notifications can show a human name instead of a raw numeric id
+    # (see app/handoff/service.py's escalate()).
+    first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     merchant: Mapped["Merchant"] = relationship(back_populates="customers")
@@ -211,8 +249,11 @@ class Message(Base):
     matched_product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id"), nullable=True)
     match_confidence: Mapped[float | None] = mapped_column(nullable=True)
     # which layer produced the reply: "rule" | "faq" | "intent" | "llm" |
-    # "handoff" (layer 5's own "passed to the seller" message) | "human"
-    # (the merchant's own /reply, relayed verbatim) | None (inbound / no match)
+    # "image" (image-search carousel) | "forward_match" (a forwarded
+    # channel post resolved directly to a known product - see
+    # app/telegram/webhook.py) | "handoff" (layer 5's own "passed to the
+    # seller" message) | "human" (the merchant's own reply, relayed
+    # verbatim) | None (inbound / no match)
     response_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     raw_update: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)

@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Conversation, Customer, Merchant, Message
+from app.db.models import Conversation, Customer, Merchant, Message, Product
 from app.db.session import get_db
 from app.faq.retrieval import match_faq
 from app.flows.executor import match_flow
-from app.handoff.service import escalate, escalation_reply_text, forward_to_admin
+from app.handoff.service import escalate, escalation_reply_text, forward_to_admin, release_if_stale
 from app.image_search import ordinal
 from app.image_search.carousel import handle_callback_query, handle_photo_message
 from app.intent.classifier import classify_intent
@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 
 
-def _get_or_create_customer(db: Session, merchant_id: uuid.UUID, telegram_user_id: int) -> Customer:
+def _get_or_create_customer(
+    db: Session, merchant_id: uuid.UUID, telegram_user_id: int, first_name: str | None = None
+) -> Customer:
     customer = db.scalar(
         select(Customer).where(
             Customer.merchant_id == merchant_id,
@@ -33,9 +35,12 @@ def _get_or_create_customer(db: Session, merchant_id: uuid.UUID, telegram_user_i
         )
     )
     if customer is None:
-        customer = Customer(merchant_id=merchant_id, telegram_user_id=telegram_user_id)
+        customer = Customer(merchant_id=merchant_id, telegram_user_id=telegram_user_id, first_name=first_name)
         db.add(customer)
         db.flush()
+    elif first_name and customer.first_name != first_name:
+        customer.first_name = first_name
+        db.add(customer)
     return customer
 
 
@@ -72,7 +77,9 @@ def receive_update(
     # arrive as a separate update type, not a message.
     if update.callback_query is not None:
         callback_query = update.callback_query
-        customer = _get_or_create_customer(db, merchant.id, callback_query.from_.id)
+        customer = _get_or_create_customer(
+            db, merchant.id, callback_query.from_.id, callback_query.from_.first_name
+        )
         answer_text = handle_callback_query(db, merchant, customer, callback_query.data or "")
         db.commit()
         try:
@@ -87,16 +94,19 @@ def receive_update(
 
     message = update.message
 
-    customer = _get_or_create_customer(db, merchant.id, message.from_.id)
+    customer = _get_or_create_customer(db, merchant.id, message.from_.id, message.from_.first_name)
     conversation = _get_or_create_conversation(db, merchant.id, customer.id)
 
     msg_type = "photo" if message.photo else "text"
 
     # Layer 5 already active on this thread: suppress every automated
-    # layer below and let the merchant handle it directly via /reply.
-    if conversation.needs_human:
+    # layer below and let the merchant handle it directly. release_if_stale
+    # lazily expires a conversation nobody's touched in 30 minutes - if it
+    # just released, fall through to normal handling below instead of
+    # suppressing this message too.
+    if conversation.needs_human and not release_if_stale(db, conversation):
         if message.text:
-            forward_to_admin(db, merchant, customer, message.text)
+            forward_to_admin(db, merchant, customer, conversation, message.text)
         db.add(
             Message(
                 conversation_id=conversation.id,
@@ -159,6 +169,24 @@ def receive_update(
         carousel_sent = handle_photo_message(db, merchant, conversation, message.chat.id, message.photo[-1].file_id)
         if carousel_sent:
             response_source = "image"
+        elif conversation.context and conversation.context.get("last_matched_product_id"):
+            # No confident image match, but this thread was just
+            # discussing a specific product - likely a payment receipt,
+            # not another product photo. Route to the merchant instead of
+            # falling into the generic "unhandled" escalation below (no
+            # payment processing, no orders table - routing only).
+            product = db.get(Product, uuid.UUID(conversation.context["last_matched_product_id"]))
+            product_label = product.name if product else "mahsulot"
+            escalate(
+                db,
+                merchant,
+                customer,
+                conversation,
+                trigger_text=f"\U0001f4b0 To'lov cheki bo'lishi mumkin - {product_label}",
+                reason="payment",
+            )
+            reply_text = escalation_reply_text(detected_language)
+            response_source = "handoff"
 
     inbound = Message(
         conversation_id=conversation.id,
