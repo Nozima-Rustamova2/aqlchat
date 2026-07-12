@@ -20,7 +20,15 @@ the platform route.
 import pytest
 
 from app.config import settings
-from app.db.models import Conversation, Customer, Merchant, MerchantAdmin, PendingAdminReply, PlatformOnboardingSession
+from app.db.models import (
+    Conversation,
+    Customer,
+    Faq,
+    Merchant,
+    MerchantAdmin,
+    PendingAdminReply,
+    PlatformOnboardingSession,
+)
 from app.onboarding import service
 from app.telegram.client import TelegramClient
 from tests.conftest import make_merchant_admin
@@ -105,32 +113,245 @@ def test_valid_token_creates_merchant_and_admin_and_advances_state(db_session, m
     db_session.flush()  # SessionLocal runs autoflush=False - the query below needs this explicitly
 
     session = db_session.get(PlatformOnboardingSession, 800005)
-    assert session.state == service.STATE_CHOOSING_VERTICAL
+    assert session.state == service.STATE_AWAITING_SHOP_NAME
     assert session.merchant_id is not None
 
     admin = db_session.query(MerchantAdmin).filter_by(telegram_user_id=800005).first()
     assert admin is not None
     assert admin.merchant_id == session.merchant_id
 
+    merchant = db_session.get(Merchant, session.merchant_id)
+    assert merchant.name == "Fake Shop Bot"  # prefilled from getMe's first_name
 
-def test_vertical_pick_finalizes_merchant(db_session, monkeypatch):
+
+def test_shop_name_confirm_keeps_the_prefilled_name(db_session, monkeypatch):
     monkeypatch.setattr(
-        service,
-        "_validate_token",
-        lambda token: {"id": 999888778, "first_name": "Another Fake Bot", "username": "another_fake_bot"},
+        service, "_validate_token", lambda token: {"id": 999888790, "first_name": "Prefill Bot", "username": "p_bot"}
+    )
+    service.handle_start(db_session, 800020, chat_id=800020)
+    service.handle_platform_callback(db_session, 800020, chat_id=800020, callback_data="lang:uz")
+    service.handle_platform_message(db_session, 800020, chat_id=800020, message_id=1, text="tok")
+
+    service.handle_platform_callback(db_session, 800020, chat_id=800020, callback_data="shop_name:confirm")
+
+    session = db_session.get(PlatformOnboardingSession, 800020)
+    assert session.state == service.STATE_CHOOSING_VERTICAL
+    merchant = db_session.get(Merchant, session.merchant_id)
+    assert merchant.name == "Prefill Bot"
+
+
+def test_shop_name_text_overrides_the_prefilled_name(db_session, monkeypatch):
+    # Bot first_names are frequently junk - see feedback_design_decisions
+    # memory - so editing must actually override, not just confirm.
+    monkeypatch.setattr(
+        service, "_validate_token", lambda token: {"id": 999888791, "first_name": "asdf123", "username": "j_bot"}
+    )
+    service.handle_start(db_session, 800021, chat_id=800021)
+    service.handle_platform_callback(db_session, 800021, chat_id=800021, callback_data="lang:uz")
+    service.handle_platform_message(db_session, 800021, chat_id=800021, message_id=1, text="tok")
+
+    service.handle_platform_message(
+        db_session, 800021, chat_id=800021, message_id=2, text="Gulnora Kiyimlari"
     )
 
-    service.handle_start(db_session, 800006, chat_id=800006)
-    service.handle_platform_callback(db_session, 800006, chat_id=800006, callback_data="lang:uz")
-    service.handle_platform_message(db_session, 800006, chat_id=800006, message_id=1, text="fake-but-valid-token-2")
+    session = db_session.get(PlatformOnboardingSession, 800021)
+    assert session.state == service.STATE_CHOOSING_VERTICAL
+    merchant = db_session.get(Merchant, session.merchant_id)
+    assert merchant.name == "Gulnora Kiyimlari"
 
+
+def _walk_to_vertical_pick(db_session, monkeypatch, telegram_user_id: int, bot_id: int) -> None:
+    monkeypatch.setattr(
+        service, "_validate_token", lambda token: {"id": bot_id, "first_name": "Walkthrough Bot", "username": "w_bot"}
+    )
+    service.handle_start(db_session, telegram_user_id, chat_id=telegram_user_id)
+    service.handle_platform_callback(db_session, telegram_user_id, chat_id=telegram_user_id, callback_data="lang:uz")
+    service.handle_platform_message(db_session, telegram_user_id, chat_id=telegram_user_id, message_id=1, text="tok")
+    service.handle_platform_callback(
+        db_session, telegram_user_id, chat_id=telegram_user_id, callback_data="shop_name:confirm"
+    )
+
+
+def test_vertical_pick_advances_to_source_not_done(db_session, monkeypatch):
+    # The v1 flow finished right after vertical pick - v3.1 continues
+    # into source/FAQ-topics/hours/tone instead.
+    _walk_to_vertical_pick(db_session, monkeypatch, 800006, 999888778)
     service.handle_platform_callback(db_session, 800006, chat_id=800006, callback_data="vertical:clothing")
 
     session = db_session.get(PlatformOnboardingSession, 800006)
-    assert session.state == service.STATE_DONE
-
+    assert session.state == service.STATE_CHOOSING_SOURCE
     merchant = db_session.get(Merchant, session.merchant_id)
     assert merchant.vertical == "clothing"
+
+
+def test_channel_source_pick_skips_straight_to_faq_topics(db_session, monkeypatch):
+    _walk_to_vertical_pick(db_session, monkeypatch, 800007, 999888779)
+    service.handle_platform_callback(db_session, 800007, chat_id=800007, callback_data="vertical:clothing")
+    service.handle_platform_callback(db_session, 800007, chat_id=800007, callback_data="source:channel")
+
+    session = db_session.get(PlatformOnboardingSession, 800007)
+    assert session.state == service.STATE_CHOOSING_FAQ_TOPICS
+
+
+def test_course_source_pick_asks_for_description_first(db_session, monkeypatch):
+    _walk_to_vertical_pick(db_session, monkeypatch, 800008, 999888780)
+    service.handle_platform_callback(db_session, 800008, chat_id=800008, callback_data="vertical:course")
+    service.handle_platform_callback(db_session, 800008, chat_id=800008, callback_data="source:course")
+
+    session = db_session.get(PlatformOnboardingSession, 800008)
+    assert session.state == service.STATE_AWAITING_COURSE_DESCRIPTION
+
+    service.handle_platform_message(
+        db_session, 800008, chat_id=800008, message_id=2, text="8 haftalik ingliz tili kursi, 500000 som"
+    )
+    session = db_session.get(PlatformOnboardingSession, 800008)
+    assert session.state == service.STATE_CHOOSING_FAQ_TOPICS
+    merchant = db_session.get(Merchant, session.merchant_id)
+    assert merchant.profile["course_raw_description"] == "8 haftalik ingliz tili kursi, 500000 som"
+
+
+def test_faq_topic_selection_creates_faq_rows_with_answers(db_session, monkeypatch):
+    _walk_to_vertical_pick(db_session, monkeypatch, 800009, 999888781)
+    service.handle_platform_callback(db_session, 800009, chat_id=800009, callback_data="vertical:clothing")
+    service.handle_platform_callback(db_session, 800009, chat_id=800009, callback_data="source:channel")
+
+    service.handle_platform_callback(db_session, 800009, chat_id=800009, callback_data="topic:price")
+    service.handle_platform_callback(db_session, 800009, chat_id=800009, callback_data="topic:delivery")
+    service.handle_platform_callback(db_session, 800009, chat_id=800009, callback_data="topics_done")
+
+    session = db_session.get(PlatformOnboardingSession, 800009)
+    assert session.state == service.STATE_AWAITING_TOPIC_ANSWER
+
+    service.handle_platform_message(db_session, 800009, chat_id=800009, message_id=2, text="150000 dan boshlab")
+    service.handle_platform_message(db_session, 800009, chat_id=800009, message_id=3, text="Toshkent bo'ylab bepul")
+
+    session = db_session.get(PlatformOnboardingSession, 800009)
+    assert session.state == service.STATE_AWAITING_HOURS
+    db_session.flush()  # SessionLocal runs autoflush=False - the query below needs this explicitly
+
+    merchant = db_session.get(Merchant, session.merchant_id)
+    faqs = db_session.query(Faq).filter_by(merchant_id=merchant.id).all()
+    answers = {faq.question: faq.response_config["uz"] for faq in faqs}
+    assert "150000 dan boshlab" in answers.values()
+    assert "Toshkent bo'ylab bepul" in answers.values()
+    assert merchant.profile["faq_topics"]["price"] == "150000 dan boshlab"
+
+
+def test_payment_topic_uses_multiselect_not_free_text(db_session, monkeypatch):
+    _walk_to_vertical_pick(db_session, monkeypatch, 800010, 999888782)
+    service.handle_platform_callback(db_session, 800010, chat_id=800010, callback_data="vertical:clothing")
+    service.handle_platform_callback(db_session, 800010, chat_id=800010, callback_data="source:channel")
+
+    service.handle_platform_callback(db_session, 800010, chat_id=800010, callback_data="topic:payment")
+    service.handle_platform_callback(db_session, 800010, chat_id=800010, callback_data="topics_done")
+
+    session = db_session.get(PlatformOnboardingSession, 800010)
+    assert session.state == service.STATE_CHOOSING_PAYMENT_METHODS
+
+    service.handle_platform_callback(db_session, 800010, chat_id=800010, callback_data="payment:cash")
+    service.handle_platform_callback(db_session, 800010, chat_id=800010, callback_data="payment:card")
+    service.handle_platform_callback(db_session, 800010, chat_id=800010, callback_data="payment_done")
+
+    session = db_session.get(PlatformOnboardingSession, 800010)
+    assert session.state == service.STATE_AWAITING_HOURS
+    db_session.flush()  # SessionLocal runs autoflush=False - the query below needs this explicitly
+
+    merchant = db_session.get(Merchant, session.merchant_id)
+    faq = db_session.query(Faq).filter_by(merchant_id=merchant.id).first()
+    assert "Naqd" in faq.response_config["uz"]
+    assert "Karta" in faq.response_config["uz"]
+
+
+def test_unselecting_a_topic_removes_it(db_session, monkeypatch):
+    _walk_to_vertical_pick(db_session, monkeypatch, 800011, 999888783)
+    service.handle_platform_callback(db_session, 800011, chat_id=800011, callback_data="vertical:clothing")
+    service.handle_platform_callback(db_session, 800011, chat_id=800011, callback_data="source:channel")
+
+    service.handle_platform_callback(db_session, 800011, chat_id=800011, callback_data="topic:price")
+    service.handle_platform_callback(db_session, 800011, chat_id=800011, callback_data="topic:price")  # toggle off
+    service.handle_platform_callback(db_session, 800011, chat_id=800011, callback_data="topics_done")
+
+    session = db_session.get(PlatformOnboardingSession, 800011)
+    # Nothing selected - straight through to hours, no follow-up loop.
+    assert session.state == service.STATE_AWAITING_HOURS
+
+
+def _finish_faqless_walkthrough(db_session, telegram_user_id: int) -> None:
+    service.handle_platform_callback(
+        db_session, telegram_user_id, chat_id=telegram_user_id, callback_data="source:channel"
+    )
+    service.handle_platform_callback(
+        db_session, telegram_user_id, chat_id=telegram_user_id, callback_data="topics_done"
+    )
+
+
+def test_full_walkthrough_reaches_done_with_hours_and_tone_saved(db_session, monkeypatch):
+    monkeypatch.setattr(TelegramClient, "send_message", lambda self, *a, **k: {"result": {"message_id": 1}})
+    _walk_to_vertical_pick(db_session, monkeypatch, 800012, 999888784)
+    service.handle_platform_callback(db_session, 800012, chat_id=800012, callback_data="vertical:cosmetics")
+    _finish_faqless_walkthrough(db_session, 800012)
+
+    session = db_session.get(PlatformOnboardingSession, 800012)
+    assert session.state == service.STATE_AWAITING_HOURS
+    service.handle_platform_message(db_session, 800012, chat_id=800012, message_id=5, text="9:00-18:00")
+
+    session = db_session.get(PlatformOnboardingSession, 800012)
+    assert session.state == service.STATE_CHOOSING_TONE
+    service.handle_platform_callback(db_session, 800012, chat_id=800012, callback_data="tone:friendly")
+
+    session = db_session.get(PlatformOnboardingSession, 800012)
+    assert session.state == service.STATE_DONE
+    merchant = db_session.get(Merchant, session.merchant_id)
+    assert merchant.profile["hours"] == "9:00-18:00"
+    assert merchant.profile["tone"] == "friendly"
+
+
+def test_hours_skip_button_leaves_hours_unset(db_session, monkeypatch):
+    monkeypatch.setattr(TelegramClient, "send_message", lambda self, *a, **k: {"result": {"message_id": 1}})
+    _walk_to_vertical_pick(db_session, monkeypatch, 800013, 999888785)
+    service.handle_platform_callback(db_session, 800013, chat_id=800013, callback_data="vertical:other")
+    _finish_faqless_walkthrough(db_session, 800013)
+
+    service.handle_platform_callback(db_session, 800013, chat_id=800013, callback_data="hours:skip")
+
+    session = db_session.get(PlatformOnboardingSession, 800013)
+    assert session.state == service.STATE_CHOOSING_TONE
+    merchant = db_session.get(Merchant, session.merchant_id)
+    assert "hours" not in (merchant.profile or {})
+
+
+def test_settings_reentry_edits_one_field_and_returns_to_done(db_session, monkeypatch):
+    monkeypatch.setattr(TelegramClient, "send_message", lambda self, *a, **k: {"result": {"message_id": 1}})
+    _walk_to_vertical_pick(db_session, monkeypatch, 800014, 999888786)
+    service.handle_platform_callback(db_session, 800014, chat_id=800014, callback_data="vertical:other")
+    _finish_faqless_walkthrough(db_session, 800014)
+    service.handle_platform_callback(db_session, 800014, chat_id=800014, callback_data="hours:skip")
+    service.handle_platform_callback(db_session, 800014, chat_id=800014, callback_data="tone:formal")
+
+    session = db_session.get(PlatformOnboardingSession, 800014)
+    assert session.state == service.STATE_DONE
+
+    # /sozlamalar -> edit tone only - must NOT cascade back through
+    # hours/faq_topics/source/vertical, just save and return to done.
+    service.handle_settings_command(db_session, 800014, chat_id=800014)
+    service.handle_platform_callback(db_session, 800014, chat_id=800014, callback_data="settings:tone")
+
+    session = db_session.get(PlatformOnboardingSession, 800014)
+    assert session.state == service.STATE_CHOOSING_TONE
+
+    service.handle_platform_callback(db_session, 800014, chat_id=800014, callback_data="tone:friendly")
+
+    session = db_session.get(PlatformOnboardingSession, 800014)
+    assert session.state == service.STATE_DONE
+    merchant = db_session.get(Merchant, session.merchant_id)
+    assert merchant.profile["tone"] == "friendly"
+
+
+def test_settings_command_is_a_noop_before_onboarding_completes(db_session):
+    # No MerchantAdmin registered yet for this identity - nothing to
+    # re-enter.
+    service.handle_settings_command(db_session, 800015, chat_id=800015)
+    assert db_session.get(PlatformOnboardingSession, 800015) is None
 
 
 @pytest.fixture

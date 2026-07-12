@@ -63,6 +63,11 @@ def receive_platform_update(
         db.commit()
         return {"ok": True}
 
+    if text == "/sozlamalar":
+        service.handle_settings_command(db, telegram_user_id, message.chat.id)
+        db.commit()
+        return {"ok": True}
+
     # An incoming admin command is resolved by identity, not URL - look up
     # which merchant (if any) this Telegram identity administers before
     # falling through to onboarding's own (session-state-gated) text
