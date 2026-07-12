@@ -58,10 +58,16 @@ class Merchant(Base):
     )
     webhook_secret: Mapped[str] = mapped_column(String(255))
     # Set during onboarding (app/onboarding/service.py) - clothing /
-    # cosmetics / other for now. Nullable: not collected before that
-    # onboarding step completes, and older merchants seeded manually
+    # cosmetics / other / courses for now. Nullable: not collected before
+    # that onboarding step completes, and older merchants seeded manually
     # won't have one.
     vertical: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # The merchant's product-catalog channel (app/products/ingestion.py) -
+    # set reactively the first time a channel_post arrives on this
+    # merchant's tenant bot (see onboarding's channel branch), not via an
+    # explicit getChat call. Unique: one channel belongs to one merchant.
+    source_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
+    source_channel_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     products: Mapped[list["Product"]] = relationship(back_populates="merchant")
@@ -117,6 +123,7 @@ class PlatformOnboardingSession(Base):
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (UniqueConstraint("source_channel_id", "source_message_id", name="uq_products_source"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
@@ -126,6 +133,23 @@ class Product(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     image_embedding: Mapped[list[float] | None] = mapped_column(Vector(IMAGE_EMBEDDING_DIM), nullable=True)
+    # Set together when a product came from channel ingestion
+    # (app/products/ingestion.py) - a forwarded post's forward_origin
+    # resolves against this pair (see app/telegram/webhook.py's
+    # forward-match branch). NULL/NULL for manually-uploaded products;
+    # Postgres treats NULL != NULL in unique constraints, so the
+    # constraint below only actually enforces uniqueness when both are
+    # present (an edited_channel_post reuses the same source_message_id,
+    # which is how ingestion tells create from update apart).
+    source_channel_id: Mapped[int | None] = mapped_column(BigInteger, index=True, nullable=True)
+    source_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # "set" / "missing" / "pending_merchant" - not DB-enforced (see the
+    # vertical/provider_name precedent elsewhere in this file), since it's
+    # app-level workflow state, not a fixed domain of values a constraint
+    # should police. Missing price is a first-class product state, not
+    # bad data - see app/products/ingestion.py and the missing-price
+    # queue in app/handoff/service.py.
+    price_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     merchant: Mapped["Merchant"] = relationship(back_populates="products")
