@@ -276,10 +276,11 @@ class Message(Base):
     match_confidence: Mapped[float | None] = mapped_column(nullable=True)
     # which layer produced the reply: "rule" | "faq" | "intent" | "llm" |
     # "image" (image-search carousel) | "forward_match" (a forwarded
-    # channel post resolved directly to a known product - see
-    # app/telegram/webhook.py) | "handoff" (layer 5's own "passed to the
-    # seller" message) | "human" (the merchant's own reply, relayed
-    # verbatim) | None (inbound / no match)
+    # channel post resolved directly to a known product) | "post_link_match"
+    # (a customer-pasted t.me link resolved the same way, no forward
+    # needed - see app/telegram/webhook.py) | "handoff" (layer 5's own
+    # "passed to the seller" message) | "human" (the merchant's own
+    # reply, relayed verbatim) | None (inbound / no match)
     response_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Coarse resolution-path label, uniform across both pipeline modes:
     # "deterministic" (forward-match, post-link match) | "llm" (Gemini

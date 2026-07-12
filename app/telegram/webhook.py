@@ -1,5 +1,6 @@
 import hmac
 import logging
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -65,11 +66,11 @@ def _get_or_create_conversation(db: Session, merchant_id: uuid.UUID, customer_id
     return conversation
 
 
-def _resolve_forward_origin(message: TelegramMessage) -> tuple[int, int, str | None] | None:
-    """Returns (chat_id, message_id, chat_title) a message was forwarded
-    from, or None if it wasn't forwarded from a channel. Telegram
-    deprecated forward_from_chat/forward_from_message_id in Bot API 7.0
-    in favor of the unified forward_origin, but both may still be
+def _resolve_forward_origin(message: TelegramMessage) -> tuple[int, int, str | None, str | None] | None:
+    """Returns (chat_id, message_id, chat_title, chat_username) a message
+    was forwarded from, or None if it wasn't forwarded from a channel.
+    Telegram deprecated forward_from_chat/forward_from_message_id in Bot
+    API 7.0 in favor of the unified forward_origin, but both may still be
     populated depending on API version - forward_origin is preferred,
     legacy fields are the fallback. NOT yet independently live-verified
     against a real forwarded channel post (see the pivot plan's Flag 6) -
@@ -80,15 +81,22 @@ def _resolve_forward_origin(message: TelegramMessage) -> tuple[int, int, str | N
         chat_id = chat.get("id")
         origin_message_id = origin.get("message_id")
         if chat_id is not None and origin_message_id is not None:
-            return chat_id, origin_message_id, chat.get("title")
+            return chat_id, origin_message_id, chat.get("title"), chat.get("username")
 
     if message.forward_from_chat is not None and message.forward_from_message_id is not None:
-        return message.forward_from_chat.id, message.forward_from_message_id, message.forward_from_chat.title
+        return (
+            message.forward_from_chat.id,
+            message.forward_from_message_id,
+            message.forward_from_chat.title,
+            message.forward_from_chat.username,
+        )
 
     return None
 
 
-def _verify_or_check_source_channel(db: Session, merchant: Merchant, chat_id: int, chat_title: str | None) -> bool:
+def _verify_or_check_source_channel(
+    db: Session, merchant: Merchant, chat_id: int, chat_title: str | None, chat_username: str | None = None
+) -> bool:
     """Returns True if `chat_id` is (now) this merchant's registered
     catalog channel - either it already was, or this is the first signal
     we've seen from it and it's being registered reactively now (see
@@ -96,13 +104,68 @@ def _verify_or_check_source_channel(db: Session, merchant: Merchant, chat_id: in
     two trusted sources for this: a real channel_post the bot received
     directly, or a forward from a known MerchantAdmin. A random
     customer's forward is never allowed to register a channel - see
-    _handle_forward_match)."""
+    _handle_forward_match). chat_username, when available, is captured
+    the same way/time as chat_id/chat_title - no separate getChat call -
+    so customer-pasted t.me/<username>/<msg_id> links can resolve later
+    (see _resolve_post_link)."""
     if merchant.source_channel_id is None:
         merchant.source_channel_id = chat_id
         merchant.source_channel_title = chat_title
+        merchant.source_channel_username = chat_username
         db.add(merchant)
         return True
     return merchant.source_channel_id == chat_id
+
+
+def _resolve_and_answer_product(
+    db: Session,
+    merchant: Merchant,
+    conversation: Conversation,
+    chat_id: int,
+    message_id: int,
+    caption_or_text: str | None,
+    photo_file_id: str | None,
+    detected_language: str | None,
+) -> str | None:
+    """Shared by _handle_forward_match and _handle_post_link_match: given
+    a (chat_id, message_id) pointer, resolves the product, writes
+    last_matched_product_id, and returns the reply text - or None if
+    there's nothing to resolve here.
+
+    Lazy-ingest (creating a Product that doesn't exist yet) only happens
+    when real content is available to ingest (caption_or_text or
+    photo_file_id) AND it's from this merchant's own registered channel -
+    a forward carries that content, a bare pasted link doesn't, so a link
+    to a not-yet-known post can only ever match an EXISTING product, per
+    the mode-switch plan ("match found -> same behavior as forward-match
+    ... no match -> fall through")."""
+    product = db.scalar(
+        select(Product).where(
+            Product.merchant_id == merchant.id,
+            Product.source_channel_id == chat_id,
+            Product.source_message_id == message_id,
+        )
+    )
+
+    if product is None:
+        if caption_or_text is None and photo_file_id is None:
+            return None
+        if merchant.source_channel_id is None or chat_id != merchant.source_channel_id:
+            return None
+        product = ingest_post(db, merchant, chat_id, message_id, photo_file_id, caption_or_text)
+
+    conversation.context = {**(conversation.context or {}), "last_matched_product_id": str(product.id)}
+    db.add(conversation)
+
+    if product.price_status != "set":
+        queue_price_query(
+            db,
+            merchant,
+            product,
+            trigger_text=f"\U0001f4b0 Mijoz so'radi: {product.name} - narxi hali kiritilmagan.",
+        )
+        return price_pending_reply_text(detected_language)
+    return format_product_reply(product)
 
 
 def _handle_forward_match(
@@ -124,42 +187,76 @@ def _handle_forward_match(
     origin = _resolve_forward_origin(message)
     if origin is None:
         return None
-    forward_chat_id, forward_message_id, _forward_chat_title = origin
+    forward_chat_id, forward_message_id, _forward_chat_title, _forward_chat_username = origin
 
     caption_or_text = message.caption or message.text
     detected_language = normalize(caption_or_text).detected_language if caption_or_text else None
+    photo_file_id = message.photo[-1].file_id if message.photo else None
 
-    product = db.scalar(
-        select(Product).where(
-            Product.merchant_id == merchant.id,
-            Product.source_channel_id == forward_chat_id,
-            Product.source_message_id == forward_message_id,
-        )
+    reply_text = _resolve_and_answer_product(
+        db, merchant, conversation, forward_chat_id, forward_message_id, caption_or_text, photo_file_id,
+        detected_language,
     )
-
-    if product is None:
-        if merchant.source_channel_id is None or forward_chat_id != merchant.source_channel_id:
-            return None
-        # Not a known product yet, but it came from this merchant's own
-        # registered channel - lazy-ingest it now instead of dead-ending.
-        photo_file_id = message.photo[-1].file_id if message.photo else None
-        product = ingest_post(db, merchant, forward_chat_id, forward_message_id, photo_file_id, caption_or_text)
-
-    conversation.context = {**(conversation.context or {}), "last_matched_product_id": str(product.id)}
-    db.add(conversation)
-
-    if product.price_status != "set":
-        queue_price_query(
-            db,
-            merchant,
-            product,
-            trigger_text=f"\U0001f4b0 Mijoz so'radi: {product.name} - narxi hali kiritilmagan.",
-        )
-        reply_text = price_pending_reply_text(detected_language)
-    else:
-        reply_text = format_product_reply(product)
-
+    if reply_text is None:
+        return None
     return reply_text, "forward_match", detected_language
+
+
+# Customers often paste a link instead of forwarding - same deterministic
+# resolution as forward-match, just a different way of pointing at the
+# same (channel, message) coordinate. Two Telegram URL forms:
+# t.me/<username>/<msg_id> and t.me/c/<internal_id>/<msg_id> (the "c"
+# form uses an internal numeric id, not a public username - real chat id
+# is -100<internal_id>).
+_TME_USERNAME_RE = re.compile(r"(?:https?://)?t\.me/(?!c/)([A-Za-z0-9_]{5,32})/(\d+)")
+_TME_INTERNAL_RE = re.compile(r"(?:https?://)?t\.me/c/(\d+)/(\d+)")
+
+
+def _resolve_post_link(merchant: Merchant, text: str) -> tuple[int, int] | None:
+    """Resolves a t.me link in `text` to (chat_id, message_id), scoped
+    strictly to THIS merchant's own registered channel - a link to any
+    other channel (including another merchant's) never resolves here,
+    regardless of URL form. Multi-tenant isolation is structural: both
+    branches compare against fields already scoped to the single
+    `merchant` resolved from webhook_slug, not looked up globally."""
+    match = _TME_INTERNAL_RE.search(text)
+    if match is not None:
+        chat_id = int(f"-100{match.group(1)}")
+        if merchant.source_channel_id is not None and chat_id == merchant.source_channel_id:
+            return chat_id, int(match.group(2))
+        return None
+
+    match = _TME_USERNAME_RE.search(text)
+    if match is not None:
+        username = match.group(1)
+        if (
+            merchant.source_channel_username is not None
+            and username.lower() == merchant.source_channel_username.lower()
+        ):
+            return merchant.source_channel_id, int(match.group(2))
+        return None
+
+    return None
+
+
+def _handle_post_link_match(
+    db: Session, merchant: Merchant, customer: Customer, conversation: Conversation, message: TelegramMessage
+) -> tuple[str, str, str | None] | None:
+    if message.text is None:
+        return None
+    origin = _resolve_post_link(merchant, message.text)
+    if origin is None:
+        return None
+    chat_id, message_id = origin
+
+    detected_language = normalize(message.text).detected_language
+
+    reply_text = _resolve_and_answer_product(
+        db, merchant, conversation, chat_id, message_id, None, None, detected_language
+    )
+    if reply_text is None:
+        return None
+    return reply_text, "post_link_match", detected_language
 
 
 def _handle_channel_post(db: Session, merchant: Merchant, channel_post: TelegramMessage) -> None:
@@ -168,7 +265,9 @@ def _handle_channel_post(db: Session, merchant: Merchant, channel_post: Telegram
     tenant webhook already resolved `merchant` from webhook_slug before
     this runs, so the first channel_post received here IS the
     verification signal - no separate getChat call needed."""
-    if not _verify_or_check_source_channel(db, merchant, channel_post.chat.id, channel_post.chat.title):
+    if not _verify_or_check_source_channel(
+        db, merchant, channel_post.chat.id, channel_post.chat.title, channel_post.chat.username
+    ):
         # A channel_post from some other channel the bot happens to also
         # be admin of - only the registered catalog channel is ingested.
         return
@@ -189,7 +288,7 @@ def _handle_channel_post(db: Session, merchant: Merchant, channel_post: Telegram
 
 
 def _handle_admin_backfill_forward(
-    db: Session, merchant: Merchant, message: TelegramMessage, origin: tuple[int, int, str | None]
+    db: Session, merchant: Merchant, message: TelegramMessage, origin: tuple[int, int, str | None, str | None]
 ) -> None:
     """The bot API can't read channel history, so onboarding tells the
     merchant to forward old posts they want ingested into the tenant bot
@@ -197,8 +296,8 @@ def _handle_admin_backfill_forward(
     MerchantAdmin, not a customer. Silent (no forward-match
     customer-facing answer, no Customer/Conversation created for the
     admin), just a per-message ack."""
-    forward_chat_id, forward_message_id, forward_chat_title = origin
-    _verify_or_check_source_channel(db, merchant, forward_chat_id, forward_chat_title)
+    forward_chat_id, forward_message_id, forward_chat_title, forward_chat_username = origin
+    _verify_or_check_source_channel(db, merchant, forward_chat_id, forward_chat_title, forward_chat_username)
 
     photo_file_id = message.photo[-1].file_id if message.photo else None
     caption_or_text = message.caption or message.text
@@ -351,6 +450,8 @@ def receive_update(
     carousel_sent = False
 
     forward_result = _handle_forward_match(db, merchant, customer, conversation, message)
+    if forward_result is None and msg_type == "text" and message.text:
+        forward_result = _handle_post_link_match(db, merchant, customer, conversation, message)
 
     if forward_result is not None:
         reply_text, response_source, detected_language = forward_result
