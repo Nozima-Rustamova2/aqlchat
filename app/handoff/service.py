@@ -33,7 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import Conversation, Customer, Merchant, MerchantAdmin, Message, PendingAdminReply
+from app.db.models import Conversation, Customer, Merchant, MerchantAdmin, Message, PendingAdminReply, Product
 from app.telegram.client import TelegramClient
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,10 @@ _ESCALATION_REPLY = {
     "uz": "Savolingizni sotuvchiga yubordim, tez orada javob beradi.",
     "ru": "Я передал ваш вопрос продавцу, он скоро ответит.",
 }
+_PRICE_PENDING_REPLY = {
+    "uz": "Narxini aniqlashtirmoqdamiz, tez orada javob beramiz.",
+    "ru": "Уточняем цену, скоро ответим.",
+}
 _DEFAULT_LANGUAGE = "uz"
 _RELEASE_BUTTON_TEXT = "✅ Botga qaytarish"
 _HANDOFF_TIMEOUT = timedelta(minutes=30)
@@ -51,6 +55,10 @@ _HANDOFF_TIMEOUT = timedelta(minutes=30)
 
 def escalation_reply_text(detected_language: str | None) -> str:
     return _ESCALATION_REPLY.get(detected_language, _ESCALATION_REPLY[_DEFAULT_LANGUAGE])
+
+
+def price_pending_reply_text(detected_language: str | None) -> str:
+    return _PRICE_PENDING_REPLY.get(detected_language, _PRICE_PENDING_REPLY[_DEFAULT_LANGUAGE])
 
 
 def _merchant_admins(db: Session, merchant_id: uuid.UUID) -> list[MerchantAdmin]:
@@ -148,6 +156,33 @@ def forward_to_admin(db: Session, merchant: Merchant, customer: Customer, conver
     for admin in _merchant_admins(db, merchant.id):
         pending = _get_or_create_pending_reply(db, admin.id, "escalation", conversation.id)
         result = _notify_admin(admin.telegram_user_id, f"{_customer_label(customer)}: {text}")
+        _record_notification(db, pending, result)
+
+
+def queue_price_query(db: Session, merchant: Merchant, product: Product, trigger_text: str) -> None:
+    """Notifies every registered admin that a product needs a price,
+    threaded per-admin like escalate() - a merchant's Telegram-reply to
+    this resolves via app/onboarding/router.py's reply-to-message
+    dispatch, the same mechanism as escalation replies (kind="price_query"
+    instead of "escalation", target_id is the product, not a conversation
+    - doesn't touch needs_human at all, since a customer waiting on a
+    price isn't otherwise stuck).
+
+    Reusable across forward-match (a customer asked about a still-unpriced
+    product - app/telegram/webhook.py) and passive channel ingestion (a
+    new post came in with no price - checkpoint 4). get-or-create plus
+    the already-notified check means repeated triggers for the same
+    product don't spam a fresh notification every time."""
+    admins = _merchant_admins(db, merchant.id)
+    if not admins:
+        logger.warning("merchant %s has no registered admins - price query has no notification", merchant.id)
+        return
+
+    for admin in admins:
+        pending = _get_or_create_pending_reply(db, admin.id, "price_query", product.id)
+        if pending.platform_message_ids:
+            continue  # already notified this admin about this product, thread still open
+        result = _notify_admin(admin.telegram_user_id, trigger_text)
         _record_notification(db, pending, result)
 
 

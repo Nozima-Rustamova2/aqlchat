@@ -10,15 +10,23 @@ from app.db.models import Conversation, Customer, Merchant, Message, Product
 from app.db.session import get_db
 from app.faq.retrieval import match_faq
 from app.flows.executor import match_flow
-from app.handoff.service import escalate, escalation_reply_text, forward_to_admin, release_if_stale
+from app.handoff.service import (
+    escalate,
+    escalation_reply_text,
+    forward_to_admin,
+    price_pending_reply_text,
+    queue_price_query,
+    release_if_stale,
+)
 from app.image_search import ordinal
 from app.image_search.carousel import handle_callback_query, handle_photo_message
 from app.intent.classifier import classify_intent
 from app.intent.router import format_product_reply, route_intent
 from app.llm.service import get_fallback_reply
 from app.nlp.transliteration import normalize
+from app.products.ingestion import ingest_post
 from app.telegram.client import TelegramClient
-from app.telegram.schemas import TelegramUpdate
+from app.telegram.schemas import TelegramMessage, TelegramUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +63,86 @@ def _get_or_create_conversation(db: Session, merchant_id: uuid.UUID, customer_id
         db.add(conversation)
         db.flush()
     return conversation
+
+
+def _resolve_forward_origin(message: TelegramMessage) -> tuple[int, int] | None:
+    """Returns (chat_id, message_id) a message was forwarded from, or
+    None if it wasn't forwarded from a channel. Telegram deprecated
+    forward_from_chat/forward_from_message_id in Bot API 7.0 in favor of
+    the unified forward_origin, but both may still be populated
+    depending on API version - forward_origin is preferred, legacy
+    fields are the fallback. NOT yet independently live-verified against
+    a real forwarded channel post (see the pivot plan's Flag 6) - do
+    that check before fully trusting this in production."""
+    origin = message.forward_origin
+    if origin is not None and origin.get("type") == "channel":
+        chat = origin.get("chat") or {}
+        chat_id = chat.get("id")
+        origin_message_id = origin.get("message_id")
+        if chat_id is not None and origin_message_id is not None:
+            return chat_id, origin_message_id
+
+    if message.forward_from_chat is not None and message.forward_from_message_id is not None:
+        return message.forward_from_chat.id, message.forward_from_message_id
+
+    return None
+
+
+def _handle_forward_match(
+    db: Session, merchant: Merchant, customer: Customer, conversation: Conversation, message: TelegramMessage
+) -> tuple[str, str, str | None] | None:
+    """The highest-priority product-resolution layer: a customer
+    forwarding a channel post carries a deterministic pointer to the
+    exact product (forward chat + message id) - free, instant, precision
+    1.0, beating image search outright for this case (which stays for
+    screenshots/own-photos - see the fallthrough below). Cheap and
+    deterministic, not an LLM call, same invariant as every other layer
+    above Layer 5.
+
+    Returns (reply_text, response_source, detected_language) if this
+    message resolved here, or None to fall through to the normal
+    pipeline - either it wasn't a forward at all, or it was a forward
+    from some OTHER channel entirely (a competitor screenshot etc.),
+    which the existing image-search path already handles."""
+    origin = _resolve_forward_origin(message)
+    if origin is None:
+        return None
+    forward_chat_id, forward_message_id = origin
+
+    caption_or_text = message.caption or message.text
+    detected_language = normalize(caption_or_text).detected_language if caption_or_text else None
+
+    product = db.scalar(
+        select(Product).where(
+            Product.merchant_id == merchant.id,
+            Product.source_channel_id == forward_chat_id,
+            Product.source_message_id == forward_message_id,
+        )
+    )
+
+    if product is None:
+        if merchant.source_channel_id is None or forward_chat_id != merchant.source_channel_id:
+            return None
+        # Not a known product yet, but it came from this merchant's own
+        # registered channel - lazy-ingest it now instead of dead-ending.
+        photo_file_id = message.photo[-1].file_id if message.photo else None
+        product = ingest_post(db, merchant, forward_chat_id, forward_message_id, photo_file_id, caption_or_text)
+
+    conversation.context = {**(conversation.context or {}), "last_matched_product_id": str(product.id)}
+    db.add(conversation)
+
+    if product.price_status != "set":
+        queue_price_query(
+            db,
+            merchant,
+            product,
+            trigger_text=f"\U0001f4b0 Mijoz so'radi: {product.name} - narxi hali kiritilmagan.",
+        )
+        reply_text = price_pending_reply_text(detected_language)
+    else:
+        reply_text = format_product_reply(product)
+
+    return reply_text, "forward_match", detected_language
 
 
 @router.post("/webhook/tenant/{webhook_slug}")
@@ -126,7 +214,11 @@ def receive_update(
     match_confidence: float | None = None
     carousel_sent = False
 
-    if msg_type == "text" and message.text:
+    forward_result = _handle_forward_match(db, merchant, customer, conversation, message)
+
+    if forward_result is not None:
+        reply_text, response_source, detected_language = forward_result
+    elif msg_type == "text" and message.text:
         result = normalize(message.text)
         normalized_text = result.normalized_text
         detected_language = result.detected_language
@@ -192,7 +284,10 @@ def receive_update(
         conversation_id=conversation.id,
         direction="in",
         type=msg_type,
-        raw_text=message.text,
+        # Channel-post forwards carry their content in `caption`, not
+        # `text` (see TelegramMessage) - fall back to it so a forwarded
+        # photo's original caption still gets logged.
+        raw_text=message.text or message.caption,
         detected_language=detected_language,
         normalized_text=normalized_text,
         response_source=response_source,

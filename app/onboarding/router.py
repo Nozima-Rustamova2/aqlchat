@@ -15,9 +15,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import Conversation, Customer, Merchant, MerchantAdmin, PendingAdminReply
+from app.db.models import Conversation, Customer, Merchant, MerchantAdmin, PendingAdminReply, Product
 from app.db.session import get_db
 from app.handoff.service import handle_admin_command, release_conversation, reply_to_customer
+from app.nlp.price_parsing import parse_price
 from app.onboarding import service
 from app.telegram.client import TelegramClient
 from app.telegram.schemas import TelegramUpdate
@@ -140,7 +141,21 @@ def _handle_reply_to_message(
         reply_to_customer(db, merchant, customer, conversation, text)
         return True
 
-    # kind == "price_query" lands in checkpoint 4, once
-    # app/nlp/price_parsing.py exists to parse the reply text into a
-    # price - no price_query rows can be created before then anyway.
+    if pending.kind == "price_query":
+        product = db.get(Product, pending.target_id)
+        if product is None:
+            return False
+        price = parse_price(text)
+        if price is None:
+            # Doesn't look like a price - don't consume the reply, let it
+            # fall through to the /reply, /release typed fallback (a
+            # harmless no-op there too if it's neither).
+            return False
+        product.price = price
+        product.price_status = "set"
+        db.add(product)
+        pending.status = "resolved"
+        db.add(pending)
+        return True
+
     return False
