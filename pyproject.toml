@@ -9,6 +9,7 @@ dependencies = [
     "anthropic>=0.116.0",
     "cryptography>=49.0.0",
     "fastapi>=0.139.0",
+    "google-genai>=2.11.0",
     "httpx>=0.28.1",
     "pgvector>=0.5.0",
     "psycopg[binary]>=3.3.4",

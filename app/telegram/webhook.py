@@ -23,6 +23,7 @@ from app.image_search import ordinal
 from app.image_search.carousel import handle_callback_query, handle_photo_message
 from app.intent.classifier import classify_intent
 from app.intent.router import format_product_reply, route_intent
+from app.llm.answer import get_grounded_answer
 from app.llm.service import get_fallback_reply
 from app.nlp.transliteration import normalize
 from app.products.ingestion import ingest_post
@@ -326,16 +327,32 @@ def _handle_llm_first_text(
     raw_text: str,
     detected_language: str | None,
 ) -> tuple[str | None, str]:
-    """llm_first mode's entire customer-facing answer layer - Gemini
-    grounded answering lands in a later checkpoint of the mode-switch
-    plan. Stubbed to always hand off for now, so pipeline_mode routing
-    itself can be built and verified before Gemini exists: a merchant in
-    llm_first mode never touches match_flow/match_faq/classify_intent/
-    get_fallback_reply, by construction (this function is the only thing
-    called in that branch), not by guarding each of those calls
-    individually."""
-    escalate(db, merchant, customer, conversation, trigger_text=raw_text, reason="llm_first_not_yet_implemented")
-    return escalation_reply_text(detected_language), "handoff"
+    """llm_first mode's entire customer-facing answer layer: Gemini
+    grounds every answer (app/llm/answer.py), never
+    match_flow/match_faq/classify_intent/get_fallback_reply - a merchant
+    in llm_first mode never touches those, by construction (this function
+    is the only thing called in that branch), not by guarding each of
+    those calls individually.
+
+    answerable=false (or the call erroring/timing out/budget-exhausted)
+    still escalates to a human, same as every other pipeline-floor miss -
+    but when Gemini produced a holding reply, that's shown to the
+    customer instead of the generic escalation text, since it's grounded
+    in the actual question rather than a canned line."""
+    result = get_grounded_answer(db, merchant, customer, conversation, normalized_text, raw_text, detected_language)
+
+    if result is not None and result.answerable and result.reply:
+        return result.reply, "llm"
+
+    if result is not None and result.reply:
+        holding_text = result.reply
+        reason = "llm_first_not_answerable"
+    else:
+        holding_text = escalation_reply_text(detected_language)
+        reason = "llm_first_unavailable"
+
+    escalate(db, merchant, customer, conversation, trigger_text=raw_text, reason=reason)
+    return holding_text, "handoff"
 
 
 # Coarse, mode-uniform label for Message.resolution_path - "deterministic"

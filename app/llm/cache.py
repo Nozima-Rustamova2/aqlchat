@@ -23,5 +23,11 @@ def get_cached_answer(redis_client: redis.Redis, merchant_id: str, normalized_te
     return redis_client.get(_cache_key(merchant_id, normalized_text))
 
 
-def set_cached_answer(redis_client: redis.Redis, merchant_id: str, normalized_text: str, answer: str) -> None:
-    redis_client.set(_cache_key(merchant_id, normalized_text), answer, ex=_CACHE_TTL_SECONDS)
+def set_cached_answer(
+    redis_client: redis.Redis, merchant_id: str, normalized_text: str, answer: str, ttl_seconds: int = _CACHE_TTL_SECONDS
+) -> None:
+    """ttl_seconds defaults to the 24h Claude-fallback TTL; llm_first-mode
+    Gemini answering (app/llm/answer.py) passes a shorter one - its top-K
+    retrieved context can shift if a merchant edits their catalog
+    mid-demo, unlike the Claude fallback's whole-catalog context."""
+    redis_client.set(_cache_key(merchant_id, normalized_text), answer, ex=ttl_seconds)

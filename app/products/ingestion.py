@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Merchant, Product
 from app.image_search.embeddings import embed_image
+from app.nlp.embeddings import embed_text
 from app.nlp.price_parsing import parse_price
 from app.telegram.client import TelegramClient
 
@@ -28,6 +29,21 @@ def _derive_name(caption: str | None) -> str:
         return _DEFAULT_NAME
     first_line = caption.strip().splitlines()[0].strip()
     return first_line[:255] if first_line else _DEFAULT_NAME
+
+
+def _derive_description(caption: str | None) -> str | None:
+    """Everything after the caption's first line (which _derive_name
+    already used as the product's short title) - sizes, colors,
+    attributes, delivery notes merchants often add below the headline.
+    Previously discarded entirely (only the first line was ever stored
+    anywhere) - a real gap for grounded answering, which needs to answer
+    from what the merchant actually wrote, not a 255-char fragment of
+    it."""
+    if not caption:
+        return None
+    lines = caption.strip().splitlines()
+    rest = "\n".join(lines[1:]).strip()
+    return rest or None
 
 
 def ingest_post(
@@ -52,16 +68,27 @@ def ingest_post(
             Product.source_message_id == source_message_id,
         )
     )
+    name = _derive_name(caption_or_text)
+    description = _derive_description(caption_or_text)
+
     if product is None:
         product = Product(
             merchant_id=merchant.id,
             source_channel_id=source_channel_id,
             source_message_id=source_message_id,
-            name=_derive_name(caption_or_text),
+            name=name,
+            description=description,
         )
         db.add(product)
     else:
-        product.name = _derive_name(caption_or_text)
+        product.name = name
+        product.description = description
+
+    # BGE-M3 text embedding for grounded-answering retrieval
+    # (app/products/retrieval.py) - kept in sync on every create/update,
+    # same as image_embedding below, so a newly-ingested product is
+    # immediately groundable without a separate backfill step.
+    product.embedding = embed_text(f"{name}\n{description}" if description else name)
 
     if photo_file_id is not None:
         try:

@@ -19,7 +19,7 @@ select_reply_text below.
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Faq
@@ -83,3 +83,32 @@ def match_faq(
 
     reply_text = select_reply_text(faq.response_config, detected_language)
     return FaqMatch(faq=faq, similarity=similarity, reply_text=reply_text)
+
+
+# Above this many FAQs, sending every row to Gemini on every message would
+# blow the context budget - switch to top-K by similarity instead. Below
+# it, sending the merchant's whole FAQ set costs little and means a
+# loosely-worded question can still land on a relevant FAQ Gemini judges
+# useful, without depending on match_faq's precision-biased threshold.
+CONTEXT_ALL_THRESHOLD = 30
+CONTEXT_LIMIT = 8
+
+
+def list_faqs_for_context(db: Session, merchant_id: uuid.UUID, query_embedding: list[float]) -> list[Faq]:
+    """FAQ rows to hand Gemini as grounding context (app/llm/answer.py) -
+    all of them if the merchant has few, else the top-K by the same
+    cosine-distance ranking match_faq uses, but with no MATCH_THRESHOLD
+    cutoff: unlike match_faq's single confident auto-reply, this is a
+    context list the LLM itself judges relevance from."""
+    total = db.scalar(select(func.count()).select_from(Faq).where(Faq.merchant_id == merchant_id)) or 0
+    if total <= CONTEXT_ALL_THRESHOLD:
+        return list(db.scalars(select(Faq).where(Faq.merchant_id == merchant_id)))
+
+    distance_expr = Faq.embedding.cosine_distance(query_embedding)
+    rows = db.scalars(
+        select(Faq)
+        .where(Faq.merchant_id == merchant_id, Faq.embedding.is_not(None))
+        .order_by(distance_expr)
+        .limit(CONTEXT_LIMIT)
+    ).all()
+    return list(rows)

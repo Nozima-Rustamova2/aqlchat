@@ -192,6 +192,13 @@ class Product(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     image_embedding: Mapped[list[float] | None] = mapped_column(Vector(IMAGE_EMBEDDING_DIM), nullable=True)
+    # BGE-M3 text embedding of name+description (app/products/ingestion.py
+    # sets this on every create/update, scripts/backfill_product_embeddings.py
+    # backfills pre-existing rows) - used by app/products/retrieval.py's
+    # top-K similarity search for Gemini grounded answering
+    # (app/llm/answer.py). Distinct from image_embedding above (SigLIP,
+    # for photo search) - same EMBEDDING_DIM constant Faq.embedding uses.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     # Set together when a product came from channel ingestion
     # (app/products/ingestion.py) - a forwarded post's forward_origin
     # resolves against this pair (see app/telegram/webhook.py's
@@ -297,10 +304,14 @@ class Message(Base):
 
 
 class LlmFallbackLog(Base):
-    """One row per LLM fallback call (not per cache hit) - captures the
-    exact context given to the model alongside its answer, specifically so
-    the deferred provider bake-off can be run later as a replay against
-    real misses instead of a synthetic test set. See app/llm/service.py.
+    """One row per LLM call (not per cache hit) - captures the exact
+    context given to the model alongside its answer, specifically so a
+    provider comparison can be run later as a replay against real misses
+    instead of a synthetic test set. Shared by both the layered-mode
+    Claude fallback (app/llm/service.py) and llm_first-mode Gemini
+    grounded answering (app/llm/answer.py) - provider_name already
+    discriminates rows from either, and this table's stated purpose
+    applies identically to both.
     """
 
     __tablename__ = "llm_fallback_logs"
@@ -313,6 +324,16 @@ class LlmFallbackLog(Base):
     provider_name: Mapped[str] = mapped_column(String(64))
     answerable: Mapped[bool] = mapped_column()
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Which prompt file version produced this answer (e.g.
+    # "grounded_answer_v1") - lets replay data stay interpretable across
+    # prompt contract changes. NULL for Claude fallback rows (no
+    # versioned prompt file there).
+    prompt_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # The product Gemini said its answer was about, if any - written to
+    # conversations.context.last_matched_product_id the same way
+    # forward-match already does. NULL when the answer wasn't about a
+    # specific product (e.g. a delivery/hours FAQ).
+    matched_product_ref: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
 

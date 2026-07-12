@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     platform_bot_token: str = ""
     platform_webhook_secret: str = ""
 
+    # Gemini grounded answering (app/llm/answer.py, app/llm/gemini_provider.py) -
+    # the llm_first pipeline mode's answer layer. No safe default; a blank
+    # key surfaces as a provider-call failure (handoff), not a crash - see
+    # GeminiProvider's lazy construction.
+    gemini_api_key: str = ""
+
     # This server's own externally-reachable base URL, used to construct
     # setWebhook calls when a tenant bot self-registers during onboarding
     # (see app/onboarding/service.py) and by scripts/reregister_webhooks.py.
