@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Conversation, Customer, Merchant, Message, Product
+from app.db.models import Conversation, Customer, Merchant, MerchantAdmin, Message, Product
 from app.db.session import get_db
 from app.faq.retrieval import match_faq
 from app.flows.executor import match_flow
@@ -65,27 +65,44 @@ def _get_or_create_conversation(db: Session, merchant_id: uuid.UUID, customer_id
     return conversation
 
 
-def _resolve_forward_origin(message: TelegramMessage) -> tuple[int, int] | None:
-    """Returns (chat_id, message_id) a message was forwarded from, or
-    None if it wasn't forwarded from a channel. Telegram deprecated
-    forward_from_chat/forward_from_message_id in Bot API 7.0 in favor of
-    the unified forward_origin, but both may still be populated
-    depending on API version - forward_origin is preferred, legacy
-    fields are the fallback. NOT yet independently live-verified against
-    a real forwarded channel post (see the pivot plan's Flag 6) - do
-    that check before fully trusting this in production."""
+def _resolve_forward_origin(message: TelegramMessage) -> tuple[int, int, str | None] | None:
+    """Returns (chat_id, message_id, chat_title) a message was forwarded
+    from, or None if it wasn't forwarded from a channel. Telegram
+    deprecated forward_from_chat/forward_from_message_id in Bot API 7.0
+    in favor of the unified forward_origin, but both may still be
+    populated depending on API version - forward_origin is preferred,
+    legacy fields are the fallback. NOT yet independently live-verified
+    against a real forwarded channel post (see the pivot plan's Flag 6) -
+    do that check before fully trusting this in production."""
     origin = message.forward_origin
     if origin is not None and origin.get("type") == "channel":
         chat = origin.get("chat") or {}
         chat_id = chat.get("id")
         origin_message_id = origin.get("message_id")
         if chat_id is not None and origin_message_id is not None:
-            return chat_id, origin_message_id
+            return chat_id, origin_message_id, chat.get("title")
 
     if message.forward_from_chat is not None and message.forward_from_message_id is not None:
-        return message.forward_from_chat.id, message.forward_from_message_id
+        return message.forward_from_chat.id, message.forward_from_message_id, message.forward_from_chat.title
 
     return None
+
+
+def _verify_or_check_source_channel(db: Session, merchant: Merchant, chat_id: int, chat_title: str | None) -> bool:
+    """Returns True if `chat_id` is (now) this merchant's registered
+    catalog channel - either it already was, or this is the first signal
+    we've seen from it and it's being registered reactively now (see
+    _handle_channel_post and _handle_admin_backfill_forward - the only
+    two trusted sources for this: a real channel_post the bot received
+    directly, or a forward from a known MerchantAdmin. A random
+    customer's forward is never allowed to register a channel - see
+    _handle_forward_match)."""
+    if merchant.source_channel_id is None:
+        merchant.source_channel_id = chat_id
+        merchant.source_channel_title = chat_title
+        db.add(merchant)
+        return True
+    return merchant.source_channel_id == chat_id
 
 
 def _handle_forward_match(
@@ -107,7 +124,7 @@ def _handle_forward_match(
     origin = _resolve_forward_origin(message)
     if origin is None:
         return None
-    forward_chat_id, forward_message_id = origin
+    forward_chat_id, forward_message_id, _forward_chat_title = origin
 
     caption_or_text = message.caption or message.text
     detected_language = normalize(caption_or_text).detected_language if caption_or_text else None
@@ -145,6 +162,62 @@ def _handle_forward_match(
     return reply_text, "forward_match", detected_language
 
 
+def _handle_channel_post(db: Session, merchant: Merchant, channel_post: TelegramMessage) -> None:
+    """Passive channel ingestion (product intake is automatic, not manual
+    upload - see the pivot plan). Channel verification is reactive: the
+    tenant webhook already resolved `merchant` from webhook_slug before
+    this runs, so the first channel_post received here IS the
+    verification signal - no separate getChat call needed."""
+    if not _verify_or_check_source_channel(db, merchant, channel_post.chat.id, channel_post.chat.title):
+        # A channel_post from some other channel the bot happens to also
+        # be admin of - only the registered catalog channel is ingested.
+        return
+
+    photo_file_id = channel_post.photo[-1].file_id if channel_post.photo else None
+    caption_or_text = channel_post.caption or channel_post.text
+    product = ingest_post(
+        db, merchant, channel_post.chat.id, channel_post.message_id, photo_file_id, caption_or_text
+    )
+
+    if product.price_status == "missing":
+        queue_price_query(
+            db,
+            merchant,
+            product,
+            trigger_text=f"Yangi post: {product.name} - narxi hali kiritilmagan. Bu mahsulot narxi qancha?",
+        )
+
+
+def _handle_admin_backfill_forward(
+    db: Session, merchant: Merchant, message: TelegramMessage, origin: tuple[int, int, str | None]
+) -> None:
+    """The bot API can't read channel history, so onboarding tells the
+    merchant to forward old posts they want ingested into the tenant bot
+    directly - recognized here by the sender being a registered
+    MerchantAdmin, not a customer. Silent (no forward-match
+    customer-facing answer, no Customer/Conversation created for the
+    admin), just a per-message ack."""
+    forward_chat_id, forward_message_id, forward_chat_title = origin
+    _verify_or_check_source_channel(db, merchant, forward_chat_id, forward_chat_title)
+
+    photo_file_id = message.photo[-1].file_id if message.photo else None
+    caption_or_text = message.caption or message.text
+    product = ingest_post(db, merchant, forward_chat_id, forward_message_id, photo_file_id, caption_or_text)
+
+    if product.price_status == "missing":
+        queue_price_query(
+            db,
+            merchant,
+            product,
+            trigger_text=f"Backfill: {product.name} - narxi hali kiritilmagan. Bu mahsulot narxi qancha?",
+        )
+
+    try:
+        TelegramClient(merchant.telegram_bot_token).send_message(message.chat.id, "✓ saqlandi")
+    except Exception:
+        logger.exception("failed to ack backfill ingest for merchant %s", merchant.id)
+
+
 @router.post("/webhook/tenant/{webhook_slug}")
 def receive_update(
     webhook_slug: str,
@@ -176,11 +249,30 @@ def receive_update(
             logger.exception("failed to answer callback query for merchant %s", merchant.id)
         return {"ok": True}
 
+    channel_post = update.channel_post or update.edited_channel_post
+    if channel_post is not None:
+        _handle_channel_post(db, merchant, channel_post)
+        db.commit()
+        return {"ok": True}
+
     if update.message is None or update.message.from_ is None:
-        # Update types we don't handle yet (edited messages, channel posts, etc.)
+        # Update types we don't handle yet (edited messages, etc.)
         return {"ok": True}
 
     message = update.message
+
+    # An admin backfilling old channel posts by forwarding them into the
+    # tenant bot - resolved and ack'd before any customer/conversation
+    # bookkeeping, since this isn't customer interaction at all.
+    origin = _resolve_forward_origin(message)
+    if origin is not None and db.scalar(
+        select(MerchantAdmin).where(
+            MerchantAdmin.merchant_id == merchant.id, MerchantAdmin.telegram_user_id == message.from_.id
+        )
+    ):
+        _handle_admin_backfill_forward(db, merchant, message, origin)
+        db.commit()
+        return {"ok": True}
 
     customer = _get_or_create_customer(db, merchant.id, message.from_.id, message.from_.first_name)
     conversation = _get_or_create_conversation(db, merchant.id, customer.id)
