@@ -68,6 +68,27 @@ class Merchant(Base):
     # explicit getChat call. Unique: one channel belongs to one merchant.
     source_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
     source_channel_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Populated the same way/time as source_channel_id/title (reactive,
+    # from TelegramChat.username on the first channel_post seen) - lets
+    # customer-pasted t.me/<username>/<msg_id> links resolve without a
+    # separate getChat call. Nullable: not every channel has a public
+    # username, and older merchants won't have this backfilled.
+    source_channel_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 'llm_first' (demo-phase default - Gemini grounds every answer,
+    # keyword/FAQ/intent layers are routed around entirely, see
+    # app/telegram/webhook.py) | 'layered' (the original full pipeline,
+    # untouched, comes back later). Not DB-enforced, matching the
+    # vertical/price_status precedent elsewhere in this file - app-level
+    # workflow state, not a fixed domain a constraint should police.
+    pipeline_mode: Mapped[str] = mapped_column(String(16), server_default="llm_first")
+    # Structured bag for onboarding-collected merchant info (shop name,
+    # hours, delivery, payment, greeting tone, course description) that
+    # app/llm/answer.py reads wholesale as grounding context. Small,
+    # structured state - not a general-purpose dumping ground, matching
+    # the Faq.response_config / Conversation.context precedent, since
+    # what's collected varies by vertical rather than fitting one fixed
+    # relational schema.
+    profile: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     products: Mapped[list["Product"]] = relationship(back_populates="merchant")
@@ -150,6 +171,11 @@ class PlatformOnboardingSession(Base):
     state: Mapped[str] = mapped_column(String(32), default="start")
     language: Mapped[str | None] = mapped_column(String(8), nullable=True)
     merchant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("merchants.id"), nullable=True)
+    # Transient scratch state for multi-select/follow-up-loop steps (e.g.
+    # which FAQ topics were picked, which one is being answered right
+    # now) - distinct from Merchant.profile, where FINALIZED answers
+    # land once a step completes.
+    data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
@@ -255,6 +281,14 @@ class Message(Base):
     # seller" message) | "human" (the merchant's own reply, relayed
     # verbatim) | None (inbound / no match)
     response_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Coarse resolution-path label, uniform across both pipeline modes:
+    # "deterministic" (forward-match, post-link match) | "llm" (Gemini
+    # grounded answer in llm_first mode, or the Claude fallback in
+    # layered mode) | "handoff". For layered-mode messages this is
+    # derived from response_source (rule/faq/intent/image/forward_match
+    # -> deterministic, llm -> llm, handoff/human -> handoff) rather than
+    # stored redundantly by each layer.
+    resolution_path: Mapped[str | None] = mapped_column(String(16), nullable=True)
     raw_update: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 

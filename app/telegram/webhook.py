@@ -218,6 +218,50 @@ def _handle_admin_backfill_forward(
         logger.exception("failed to ack backfill ingest for merchant %s", merchant.id)
 
 
+def _handle_llm_first_text(
+    db: Session,
+    merchant: Merchant,
+    customer: Customer,
+    conversation: Conversation,
+    normalized_text: str,
+    raw_text: str,
+    detected_language: str | None,
+) -> tuple[str | None, str]:
+    """llm_first mode's entire customer-facing answer layer - Gemini
+    grounded answering lands in a later checkpoint of the mode-switch
+    plan. Stubbed to always hand off for now, so pipeline_mode routing
+    itself can be built and verified before Gemini exists: a merchant in
+    llm_first mode never touches match_flow/match_faq/classify_intent/
+    get_fallback_reply, by construction (this function is the only thing
+    called in that branch), not by guarding each of those calls
+    individually."""
+    escalate(db, merchant, customer, conversation, trigger_text=raw_text, reason="llm_first_not_yet_implemented")
+    return escalation_reply_text(detected_language), "handoff"
+
+
+# Coarse, mode-uniform label for Message.resolution_path - "deterministic"
+# | "llm" | "handoff". Layered-mode messages derive this from their
+# existing response_source rather than each layer setting it separately;
+# llm_first mode sets response_source values that map the same way.
+_RESOLUTION_PATH_BY_RESPONSE_SOURCE = {
+    "rule": "deterministic",
+    "faq": "deterministic",
+    "intent": "deterministic",
+    "image": "deterministic",
+    "forward_match": "deterministic",
+    "post_link_match": "deterministic",
+    "llm": "llm",
+    "handoff": "handoff",
+    "human": "handoff",
+}
+
+
+def _resolution_path_for(response_source: str | None) -> str | None:
+    if response_source is None:
+        return None
+    return _RESOLUTION_PATH_BY_RESPONSE_SOURCE.get(response_source, "handoff")
+
+
 @router.post("/webhook/tenant/{webhook_slug}")
 def receive_update(
     webhook_slug: str,
@@ -317,12 +361,22 @@ def receive_update(
 
         # A carousel was just shown - "ikkinchisi narxi qancha?" ("how
         # much is the second one?") should resolve against it before
-        # trying the generic chain below, which has no way to know what
-        # "the second one" refers to.
+        # trying the mode-specific chain below, which has no way to know
+        # what "the second one" refers to. Shared by both pipeline
+        # modes - cheap and deterministic, same class of check as
+        # forward-match.
         ordinal_match = ordinal.resolve(db, conversation, normalized_text)
         if ordinal_match is not None:
             reply_text = format_product_reply(ordinal_match.product)
             response_source = "intent"
+        elif merchant.pipeline_mode == "llm_first":
+            # Demo-phase mode: Gemini grounds every answer, the layered
+            # pipeline below is routed around entirely - a merchant here
+            # never calls match_flow/match_faq/classify_intent/
+            # get_fallback_reply. See the mode-switch plan.
+            reply_text, response_source = _handle_llm_first_text(
+                db, merchant, customer, conversation, normalized_text, message.text, detected_language
+            )
         else:
             matched_flow = match_flow(db, merchant.id, normalized_text)
             if matched_flow is not None:
@@ -383,6 +437,7 @@ def receive_update(
         detected_language=detected_language,
         normalized_text=normalized_text,
         response_source=response_source,
+        resolution_path=_resolution_path_for(response_source),
         match_confidence=match_confidence,
         raw_update=update.model_dump(mode="json", by_alias=True),
     )
@@ -415,6 +470,7 @@ def receive_update(
                 type="text",
                 raw_text=reply_text,
                 response_source=response_source,
+                resolution_path=_resolution_path_for(response_source),
             )
         )
 
