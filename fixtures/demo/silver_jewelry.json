@@ -1,0 +1,102 @@
+{
+  "products": [
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 1 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_01.jpg",
+      "price": 100000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 2 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_02.jpg",
+      "price": 200000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 3 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_03.jpg",
+      "price": 300000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 4 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_04.jpg",
+      "price": 400000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 5 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_05.jpg",
+      "price": 500000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 6 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_06.jpg",
+      "price": 600000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 7 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_07.jpg",
+      "price": 700000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 8 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_08.jpg",
+      "price": 800000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 9 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_09.jpg",
+      "price": 900000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 10 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_10.jpg",
+      "price": 1000000,
+      "currency": "UZS"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 11 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_11.jpg"
+    },
+    {
+      "caption": "TODO: Kumush zargarlik mahsulot 12 nomi\nTODO: tavsif - o'lcham/rang/tarkib/xususiyatlar shu yerga",
+      "image_path": "images/silver_jewelry_12.jpg"
+    }
+  ],
+  "faqs": [
+    {
+      "question": "Yetkazib berish qancha turadi?",
+      "answers": {
+        "uz": "TODO: javob yozing",
+        "ru": "TODO: напишите ответ"
+      }
+    },
+    {
+      "question": "To'lov va nasiya sharoitlari qanday?",
+      "answers": {
+        "uz": "TODO: javob yozing",
+        "ru": "TODO: напишите ответ"
+      }
+    },
+    {
+      "question": "Manzil va ish vaqtingiz qanday?",
+      "answers": {
+        "uz": "TODO: javob yozing",
+        "ru": "TODO: напишите ответ"
+      }
+    },
+    {
+      "question": "Originallik qanday tasdiqlanadi?",
+      "answers": {
+        "uz": "TODO: javob yozing",
+        "ru": "TODO: напишите ответ"
+      }
+    }
+  ]
+}
