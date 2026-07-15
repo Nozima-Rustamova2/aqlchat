@@ -8,6 +8,18 @@ Latin/Cyrillic/Russian (vs 77.78% for Qwen3-Embedding-0.6B, which
 systematically failed Russian-to-Uzbek matching specifically). See the
 aqlchat-phase1-plan memory for the full comparison. Confirmed embedding
 dimension: 1024 (matches EMBEDDING_DIM in app/db/models.py).
+
+All text is lowercased here, at the single choke point every caller (FAQ
+questions, intent anchors, product name+description, inbound queries)
+already goes through - BGE-M3 is measurably case-sensitive on short Uzbek
+fragments, and phone keyboards auto-capitalize the first letter: measured
+2026-07-15, "Narxi qancha?" scored only 0.621 against its own lowercase
+twin (below the 0.72 FAQ MATCH_THRESHOLD) and 0.583 against "Bu
+mahsulotning narxi qancha?", vs 0.858 for the all-lowercase pair. Longer
+capitalized sentences were unaffected; it's specifically short fragments.
+Embeddings stored before this change live in a different space - re-embed
+them with scripts/backfill_product_embeddings.py --force (covers Products
+and Faqs).
 """
 
 import os
@@ -34,8 +46,8 @@ def _get_model() -> SentenceTransformer:
 
 
 def embed_text(text: str) -> list[float]:
-    return _get_model().encode(text, normalize_embeddings=True).tolist()
+    return _get_model().encode(text.lower(), normalize_embeddings=True).tolist()
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
-    return _get_model().encode(texts, normalize_embeddings=True).tolist()
+    return _get_model().encode([t.lower() for t in texts], normalize_embeddings=True).tolist()

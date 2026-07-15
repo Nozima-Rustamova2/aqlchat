@@ -32,6 +32,16 @@ from app.nlp.embeddings import embed_texts
 # second anchor - left as a documented miss rather than adding more
 # anchors chasing this one test sentence, which risks curve-fitting
 # instead of real generalization.
+#
+# Recalibrated 2026-07-15 after the lowercasing fix in
+# app/nlp/embeddings.py, same held-out set: true-intent similarities now
+# 0.694-0.859 (mean 0.794, 10/10 correct), and the "wrong order" complaint
+# documented miss above is closed (0.652 -> 0.831). All none-cases still
+# fall below the threshold, but the hottest one ("Понятно, rahmat aytaman
+# keyinroq") rose to 0.678 - only 0.002 under 0.68. The threshold holds
+# with full separation, but the margin on that side is razor-thin: any
+# future embedding-space change (model swap, normalization change) must
+# re-run this calibration before trusting 0.68.
 CONFIDENCE_THRESHOLD = 0.68
 
 _labels: list[str] = []

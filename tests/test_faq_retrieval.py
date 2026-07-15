@@ -38,6 +38,27 @@ def test_cross_script_match_cyrillic_uzbek_query(db_session, test_merchant):
     assert match.reply_text == "Payme yoki Click orqali."
 
 
+def test_short_capitalized_fragment_matches_longer_faq(db_session, test_merchant):
+    # Phone keyboards auto-capitalize the first letter, and normalize()
+    # preserves case through transliteration ("Нархи қанча?" -> "Narxi
+    # qancha?"). Pre-lowercasing (see app/nlp/embeddings.py) this exact
+    # pair scored 0.583 - far below MATCH_THRESHOLD - purely because of
+    # the leading capital; post-fix it scores 0.893. Guards the most
+    # common real-traffic shape there is: a terse capitalized price
+    # question.
+    make_faq(
+        db_session,
+        test_merchant.id,
+        question="Bu mahsulotning narxi qancha?",
+        responses={"uz": "Narxi 10 ming so'm.", "ru": "Цена 10 тысяч сум."},
+    )
+    result = normalize("Нархи қанча?")
+    match = match_faq(db_session, test_merchant.id, result.normalized_text, result.detected_language)
+
+    assert match is not None
+    assert match.reply_text == "Narxi 10 ming so'm."
+
+
 def test_unrelated_query_does_not_match(db_session, test_merchant):
     make_faq(
         db_session,

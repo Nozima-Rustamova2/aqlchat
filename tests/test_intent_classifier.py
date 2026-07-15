@@ -47,13 +47,15 @@ def test_human_handoff_russian_live_person_phrasing():
     assert match.label == "human_handoff"
 
 
-def test_complaint_uzbek_wrong_order_phrasing_is_a_documented_miss():
-    # This specific "wrong order" phrasing sits in the overlap between the
-    # true-intent and none-case similarity distributions (0.652, just
-    # below the 0.68 threshold) even after adding a dedicated anchor for
-    # it - see the calibration note in app/intent/classifier.py. Falling
-    # through here is the deliberate, safer trade-off, not a bug.
-    assert classify_intent("Buyurtmam noto'g'ri kelib qoldi, chalkashib ketdi") is None
+def test_complaint_uzbek_wrong_order_phrasing():
+    # Was a documented miss under the 2026-07-11 calibration (0.652, just
+    # below the 0.68 threshold, even after adding a dedicated anchor). The
+    # 2026-07-15 lowercasing fix in app/nlp/embeddings.py closed it: the
+    # sentence starts with a capital "Buyurtmam" and now scores 0.831 -
+    # see the recalibration note in app/intent/classifier.py.
+    match = classify_intent("Buyurtmam noto'g'ri kelib qoldi, chalkashib ketdi")
+    assert match is not None
+    assert match.label == "complaint"
 
 
 def test_complaint_russian():
