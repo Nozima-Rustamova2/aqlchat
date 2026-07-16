@@ -2,7 +2,7 @@ import uuid
 
 from app.llm.budget import DAILY_CUSTOMER_CALL_LIMIT, check_and_consume_budget
 from app.llm.cache import get_cached_answer, set_cached_answer
-from app.llm.redis_client import get_redis
+from app.redis_client import get_redis
 
 
 def test_budget_allows_calls_under_the_limit():

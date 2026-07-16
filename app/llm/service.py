@@ -25,7 +25,7 @@ from app.llm.cache import get_cached_answer, set_cached_answer
 from app.llm.claude_provider import ClaudeProvider
 from app.llm.context import build_context
 from app.llm.fallback import LLMProvider
-from app.llm.redis_client import get_redis
+from app.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 

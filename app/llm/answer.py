@@ -31,7 +31,7 @@ from app.faq.retrieval import list_faqs_for_context, select_reply_text
 from app.llm.budget import check_and_consume_budget
 from app.llm.cache import get_cached_answer, set_cached_answer
 from app.llm.gemini_provider import AnswerContext, AnswerResult, GeminiProvider
-from app.llm.redis_client import get_redis
+from app.redis_client import get_redis
 from app.nlp.embeddings import embed_text
 from app.products.retrieval import find_text_candidates
 

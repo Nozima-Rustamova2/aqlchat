@@ -103,13 +103,22 @@ def make_merchant_admin(db_session, merchant_id, telegram_user_id: int) -> Merch
     return admin
 
 
-def make_flow(db_session, merchant_id, name: str, keywords: list[str], reply_text: str) -> Flow:
+def make_flow(
+    db_session,
+    merchant_id,
+    name: str,
+    keywords: list[str],
+    reply_text: str = "",
+    channel: str = "telegram",
+    response_config: dict | None = None,
+) -> Flow:
     flow = Flow(
         merchant_id=merchant_id,
         name=name,
         trigger_type="keyword",
         trigger_value=json.dumps(keywords),
-        response_config={"type": "text", "text": reply_text},
+        channel=channel,
+        response_config=response_config if response_config is not None else {"type": "text", "text": reply_text},
     )
     db_session.add(flow)
     db_session.flush()

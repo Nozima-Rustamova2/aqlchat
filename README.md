@@ -13,6 +13,7 @@ AI customer-service bot for Telegram sellers in Uzbekistan. Merchants connect th
   5. LLM fallback — Claude, with per-merchant budget limits and Redis response caching.
   6. Human handoff — anything still unanswered escalates to the merchant.
 - **Photo search** — a customer sends a product photo; the bot replies with a top-k carousel of catalog matches and inline confirm buttons.
+- **Instagram comment automation** — a customer comments a keyword on the merchant's IG post/reel; the bot DMs them the merchant's link and (on exact keyword matches) leaves a public "DM'ga yubordim! 📩" reply. See [`app/instagram/README.md`](app/instagram/README.md).
 - **Merchant stays in control** — a shared platform bot is the merchant's admin channel, separate from their own customer-facing tenant bot. Escalations are forwarded there; the merchant answers with `/reply`, which suppresses all automation on that conversation until it is released.
 - **Self-serve onboarding** — a merchant messages the platform bot, pastes a fresh BotFather token, and their own tenant bot is registered and live within the same conversation. No manual seeding required.
 - **Multi-tenant** — one deployment serves many merchants; each has its own bot token (encrypted at rest), webhook URL, and secret token.
@@ -90,7 +91,8 @@ All settings load from `.env` (see `.env.example`):
 | `TOKEN_ENCRYPTION_KEY` | Fernet key encrypting tenant bot tokens at rest |
 | `PLATFORM_BOT_TOKEN` | The shared platform bot's token (onboarding + admin channel) |
 | `PLATFORM_WEBHOOK_SECRET` | Verifies inbound requests to the platform bot's webhook |
-| `PUBLIC_BASE_URL` | This server's externally-reachable base URL, used to auto-register tenant webhooks during onboarding |
+| `PUBLIC_BASE_URL` | This server's externally-reachable base URL, used to auto-register tenant webhooks during onboarding and as the base of the Instagram webhook/OAuth URLs |
+| `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` / `INSTAGRAM_VERIFY_TOKEN` / `INSTAGRAM_GRAPH_API_VERSION` | Instagram comment automation — see [`app/instagram/README.md`](app/instagram/README.md) |
 
 Per-merchant secrets (bot token, webhook secret, webhook slug) live in the database, not in environment variables. The bot token is encrypted at rest (`app/db/crypto.py`); who administers a merchant lives in `merchant_admins`, not a single admin chat id.
 
@@ -107,6 +109,7 @@ app/
   image_search/   photo -> catalog matching, carousel UX, ordinal references
   llm/            Claude fallback: provider, context, cache, budget
   handoff/        escalation + merchant admin commands (/reply, ...)
+  instagram/      comment-to-DM automation: webhook, OAuth, queue + worker (see its README)
   db/             SQLAlchemy models, session, at-rest encryption
 alembic/          migrations
 scripts/          merchant seeding, webhook re-registration, YAML content loaders

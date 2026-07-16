@@ -81,6 +81,19 @@ class Merchant(Base):
     # vertical/price_status precedent elsewhere in this file - app-level
     # workflow state, not a fixed domain a constraint should police.
     pipeline_mode: Mapped[str] = mapped_column(String(16), server_default="llm_first")
+    # Instagram connection (app/instagram/) - all nullable because the
+    # channel is opt-in per merchant, connected via OAuth from the website
+    # ("connect Instagram" button) after onboarding. instagram_user_id is
+    # the routing key for /instagram/webhook (entry[].id -> merchant) and
+    # THE tenant boundary on this channel - unique for the same reason
+    # telegram_bot_id is: one IG account belongs to one merchant.
+    instagram_user_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
+    # Long-lived Instagram Login access token (~60 days), encrypted at
+    # rest exactly like telegram_bot_token above (and like it, NOT unique:
+    # Fernet ciphertext is randomized). Refreshed by
+    # scripts/refresh_instagram_tokens.py before expiry.
+    instagram_access_token: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+    instagram_token_expires_at: Mapped[datetime | None] = mapped_column(nullable=True)
     # Structured bag for onboarding-collected merchant info (shop name,
     # hours, delivery, payment, greeting tone, course description) that
     # app/llm/answer.py reads wholesale as grounding context. Small,
@@ -368,6 +381,18 @@ class Flow(Base):
     name: Mapped[str] = mapped_column(String(255))
     trigger_type: Mapped[str] = mapped_column(String(32))  # e.g. "keyword", "command"
     trigger_value: Mapped[str] = mapped_column(String(255))
+    # Which inbound channel this rule listens on: 'telegram' (customer
+    # messages to the tenant bot, the original pipeline's Layer-1 rules)
+    # | 'instagram_comment' (comment-to-DM automation, app/instagram/).
+    # Not DB-enforced, per the pipeline_mode/vertical precedent above.
+    # match_flow filters on this so an IG comment rule can never fire on
+    # a Telegram message or vice versa.
+    channel: Mapped[str] = mapped_column(String(32), server_default="telegram")
+    # Shape differs by channel. telegram: {"type": "text", "text": ...}.
+    # instagram_comment: {"link": ..., "private_reply": {uz/ru with
+    # {link} placeholder}, "public_reply": {uz/ru} (optional),
+    # "media_ids": [...] (optional - absent/empty = all posts; else the
+    # rule only fires on comments under those IG media ids)}.
     response_config: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
@@ -389,3 +414,46 @@ class Faq(Base):
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     merchant: Mapped["Merchant"] = relationship(back_populates="faqs")
+
+
+class CommentEvent(Base):
+    """One row per inbound Instagram comment webhook event - the dedupe
+    record AND the processing log for comment-to-DM automation
+    (app/instagram/). Deliberately NOT a Message: messages require a
+    Conversation (non-nullable FK) and this feature creates no
+    conversations - a comment is a one-shot public event, not a thread.
+    Follows the LlmFallbackLog/ImageMatchLog purpose-built-log precedent.
+
+    The UNIQUE (merchant_id, external_id) constraint is the dedupe:
+    the webhook handler inserts (status='pending') before enqueueing, so
+    Meta's redelivery of the same comment id no-ops at the DB instead of
+    double-DMing a customer.
+
+    status lifecycle: pending (webhook accepted, queued) -> matched ->
+    replied | no_match (silence, by design) | deferred (rate-limit cap
+    hit, parked in the Redis deferred set) | dropped_stale (older than
+    Meta's 7-day private-reply window at processing time) | failed.
+    """
+
+    __tablename__ = "comment_events"
+    __table_args__ = (UniqueConstraint("merchant_id", "external_id", name="uq_comment_events_merchant_external"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
+    # 'instagram_comment' today; a column (not implied) so a future
+    # comment-bearing channel reuses this table instead of cloning it.
+    channel: Mapped[str] = mapped_column(String(32))
+    # IG comment id - Meta-issued, string-typed (their ids overflow int32
+    # and are documented as strings; never arithmetic on them).
+    external_id: Mapped[str] = mapped_column(String(64))
+    # from.id of the commenter - kept for the loop-guard audit trail
+    # (our own public replies arrive back on this webhook with
+    # from.id == the merchant's own instagram_user_id).
+    commenter_id: Mapped[str] = mapped_column(String(64))
+    media_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detected_language: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    matched_flow_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("flows.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+    replied_at: Mapped[datetime | None] = mapped_column(nullable=True)

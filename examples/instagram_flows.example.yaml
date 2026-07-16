@@ -1,0 +1,42 @@
+# Example Instagram comment-to-DM rules (channel: instagram_comment).
+# Loaded with the same loader as Telegram flows - each file only replaces
+# rules for the channels it defines, so this file and flows.example.yaml
+# can be loaded independently for the same merchant:
+#   uv run python -m scripts.load_flows --merchant-id <id> --file examples/instagram_flows.example.yaml
+#
+# Matching: keywords are case-insensitive substrings of the normalized
+# comment text (so "narx" also catches "narxi qancha?"). The private DM
+# fires on any substring match; the public_reply under the comment fires
+# only when the comment exactly equals a keyword. media_ids scopes a rule
+# to specific posts/reels (empty or omitted = all posts); a post-scoped
+# rule beats an account-wide one when both match.
+
+flows:
+  - name: price_link
+    channel: instagram_comment
+    keywords:
+      - "narx"
+      - "narxi"
+      - "цена"
+      - "link"
+    response:
+      link: "https://t.me/merchant_bot"
+      private_reply:
+        uz: "Assalomu alaykum! Mana havola 👉 {link}"
+        ru: "Здравствуйте! Вот ссылка 👉 {link}"
+      public_reply:
+        uz: "DM'ga yubordim! 📩"
+        ru: "Отправили в личку! 📩"
+
+  - name: summer_reel_promo
+    channel: instagram_comment
+    keywords:
+      - "yozgi"
+      - "летний"
+    response:
+      link: "https://t.me/merchant_bot?start=summer"
+      private_reply:
+        uz: "Yozgi kolleksiya havolasi 👉 {link}"
+        ru: "Ссылка на летнюю коллекцию 👉 {link}"
+      media_ids:
+        - "17900000000000001"

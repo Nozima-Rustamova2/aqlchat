@@ -162,7 +162,7 @@ def test_provider_timeout_falls_through_instead_of_hanging(monkeypatch, db_sessi
 
 def test_budget_exhausted_returns_none_without_calling_provider(monkeypatch, db_session, test_merchant):
     from app.llm.budget import DAILY_CUSTOMER_CALL_LIMIT
-    from app.llm.redis_client import get_redis
+    from app.redis_client import get_redis
     import datetime as dt
 
     stub = _use_stub_provider(

@@ -7,7 +7,7 @@ import app.llm.service as llm_service
 from app.db.models import LlmFallbackLog
 from app.llm.budget import DAILY_CUSTOMER_CALL_LIMIT
 from app.llm.fallback import FallbackContext, FallbackResult
-from app.llm.redis_client import get_redis
+from app.redis_client import get_redis
 
 
 class _StubProvider:

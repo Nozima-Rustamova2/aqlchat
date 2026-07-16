@@ -29,6 +29,18 @@ class Settings(BaseSettings):
     # GeminiProvider's lazy construction.
     gemini_api_key: str = ""
 
+    # Instagram comment-to-DM automation (app/instagram/). app_secret
+    # signs webhook payloads (X-Hub-Signature-256); verify_token is the
+    # static challenge secret for Meta's GET verification handshake -
+    # both blank by default so an unconfigured deploy fails webhook
+    # verification loudly instead of accepting unsigned traffic.
+    instagram_app_id: str = ""
+    instagram_app_secret: str = ""
+    instagram_verify_token: str = ""
+    # Pinned Graph API version (Meta retires versions ~2x/year - bump
+    # deliberately, with the changelog open, not implicitly).
+    instagram_graph_api_version: str = "v23.0"
+
     # This server's own externally-reachable base URL, used to construct
     # setWebhook calls when a tenant bot self-registers during onboarding
     # (see app/onboarding/service.py) and by scripts/reregister_webhooks.py.

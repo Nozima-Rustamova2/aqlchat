@@ -28,7 +28,11 @@ def main() -> None:
 
     db = SessionLocal()
     try:
-        db.execute(delete(Flow).where(Flow.merchant_id == args.merchant_id))
+        # Replace only the channels this file defines - a Telegram flow
+        # file and an Instagram flow file are loaded independently, and
+        # reloading one must not clobber the other channel's rules.
+        channels = {definition.channel for definition in flow_file.flows}
+        db.execute(delete(Flow).where(Flow.merchant_id == args.merchant_id, Flow.channel.in_(channels)))
         for definition in flow_file.flows:
             db.add(
                 Flow(
@@ -36,7 +40,8 @@ def main() -> None:
                     name=definition.name,
                     trigger_type=definition.trigger_type,
                     trigger_value=json.dumps(definition.keywords),
-                    response_config=definition.response.model_dump(),
+                    channel=definition.channel,
+                    response_config=definition.response.model_dump(exclude_none=True),
                 )
             )
         db.commit()
