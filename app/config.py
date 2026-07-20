@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     # GeminiProvider's lazy construction.
     gemini_api_key: str = ""
 
+    # Resend (app/auth/email.py) - sends the website signup/login 6-digit
+    # email verification code. resend_from_email defaults to Resend's
+    # shared sandbox sender, which only delivers to the Resend account's
+    # own verified address - swap to a verified domain sender before real
+    # merchants sign up.
+    resend_api_key: str = ""
+    resend_from_email: str = "Dukan AI <onboarding@resend.dev>"
+
     # Instagram comment-to-DM automation (app/instagram/). app_secret
     # signs webhook payloads (X-Hub-Signature-256); verify_token is the
     # static challenge secret for Meta's GET verification handshake -

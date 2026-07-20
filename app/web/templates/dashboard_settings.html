@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sozlamalar — Dukan AI</title>
+<meta name="theme-color" content="#FCF6EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14181F" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='12' fill='%231E4954'/%3E%3Ccircle cx='24' cy='24' r='7.5' fill='%23C9702E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  (function () {
+    var saved = localStorage.getItem('theme');
+    var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: oklch(0.975 0.012 75);
+    --surface: #fff;
+    --surface-alt: oklch(0.94 0.015 75);
+    --border: oklch(0.91 0.015 75);
+    --hairline: oklch(0.89 0.015 75);
+    --text: oklch(0.22 0.02 250);
+    --text-2: oklch(0.42 0.02 250);
+    --text-4: oklch(0.5 0.02 250);
+    --primary: oklch(0.32 0.06 200);
+    --primary-text: oklch(0.32 0.06 200);
+    --on-primary: #fff;
+    --primary-shadow: oklch(0.32 0.06 200 / 0.28);
+    --primary-border: oklch(0.32 0.06 200 / 0.35);
+    --accent: oklch(0.62 0.14 45);
+    --accent-tint: oklch(0.95 0.035 45);
+    --accent-text: oklch(0.5 0.14 45);
+    --ok: oklch(0.6 0.15 145);
+    --ok-tint: oklch(0.95 0.04 145);
+    --ok-text: oklch(0.45 0.13 145);
+    --sidebar: oklch(0.98 0.008 75);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(0.16 0.015 250);
+    --surface: oklch(0.22 0.02 250);
+    --surface-alt: oklch(0.28 0.02 250);
+    --border: oklch(0.31 0.02 250);
+    --hairline: oklch(0.3 0.02 250);
+    --text: oklch(0.93 0.008 75);
+    --text-2: oklch(0.75 0.015 250);
+    --text-4: oklch(0.68 0.015 250);
+    --primary: oklch(0.42 0.07 200);
+    --primary-text: oklch(0.78 0.07 200);
+    --on-primary: #fff;
+    --primary-shadow: oklch(0.42 0.07 200 / 0.35);
+    --primary-border: oklch(0.6 0.07 200 / 0.4);
+    --accent: oklch(0.68 0.13 45);
+    --accent-tint: oklch(0.31 0.06 45);
+    --accent-text: oklch(0.82 0.11 45);
+    --ok: oklch(0.65 0.14 145);
+    --ok-tint: oklch(0.28 0.06 145);
+    --ok-text: oklch(0.78 0.1 145);
+    --sidebar: oklch(0.19 0.015 250);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font-family: 'Manrope', sans-serif;
+    color: var(--text); background: var(--bg);
+  }
+  h1, h2, h3 { font-family: 'Sora', sans-serif; }
+  a { text-decoration: none; color: inherit; }
+  button { font-family: 'Manrope', sans-serif; }
+
+  .app-shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; flex-shrink: 0; background: var(--sidebar);
+    border-right: 1px solid var(--hairline);
+    display: flex; flex-direction: column; padding: 18px 14px;
+  }
+  .sidebar-brand { display: flex; align-items: center; gap: 9px; padding: 6px 8px 20px; }
+  .logo-mark { position: relative; width: 30px; height: 23px; flex-shrink: 0; }
+  .logo-mark .big { position: absolute; top: 0; left: 0; width: 21px; height: 21px; border-radius: 50%; background: var(--primary); }
+  .logo-mark .small { position: absolute; bottom: 0; right: 0; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); }
+  .wordmark { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 16.5px; letter-spacing: -0.01em; color: var(--primary-text); }
+  .sidebar-account {
+    display: flex; align-items: center; gap: 10px; padding: 10px 8px; margin-bottom: 14px;
+    border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+  }
+  .avatar-circle {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: var(--on-primary);
+    display: flex; align-items: center; justify-content: center; font-family: 'Sora', sans-serif;
+    font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .account-name { font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 11px; padding: 10px 10px; border-radius: 10px;
+    font-size: 14.5px; font-weight: 600; color: var(--text-2); cursor: pointer;
+  }
+  .nav-item svg { flex-shrink: 0; opacity: 0.75; }
+  .nav-item.active { background: var(--surface-alt); color: var(--primary-text); }
+  .nav-item.active svg { opacity: 1; }
+  .nav-item.disabled { color: var(--text-4); cursor: default; opacity: 0.6; }
+  .soon-badge {
+    margin-left: auto; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 999px;
+    background: var(--accent-tint); color: var(--accent-text);
+  }
+  .sidebar-footer { margin-top: auto; padding-top: 14px; }
+  .logout-link {
+    width: 100%; border: 1.5px solid var(--primary-border); background: transparent; color: var(--primary-text);
+    font-weight: 700; font-size: 13.5px; padding: 9px 12px; border-radius: 12px; cursor: pointer;
+  }
+
+  main { flex: 1; padding: clamp(24px, 4vw, 44px) clamp(20px, 4vw, 48px); max-width: 760px; }
+  h1 { font-weight: 800; font-size: 26px; margin: 0 0 4px; }
+  .sub { color: var(--text-2); font-size: 15px; margin: 0 0 28px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+    padding: 22px 24px; margin-bottom: 18px;
+  }
+  .card h3 { font-size: 15px; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-4); }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
+  .row + .row { border-top: 1px solid var(--hairline); }
+  .row-label { font-size: 14px; color: var(--text-2); }
+  .row-value { font-size: 14.5px; font-weight: 600; }
+  .conn-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; }
+  .conn-row + .conn-row { border-top: 1px solid var(--hairline); }
+  .conn-label { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+  .conn-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .conn-dot.on { background: var(--ok); }
+  .badge {
+    font-size: 12.5px; font-weight: 700; padding: 5px 12px; border-radius: 999px;
+    background: var(--surface-alt); color: var(--text-4);
+  }
+  .badge.on { background: var(--ok-tint); color: var(--ok-text); }
+  .btn-small {
+    font-weight: 700; font-size: 13.5px; padding: 8px 16px; border-radius: 12px; border: none; cursor: pointer;
+    background: var(--primary); color: var(--on-primary);
+  }
+  #loading { text-align: center; padding: 60px 20px; color: var(--text-4); }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><div class="big"></div><div class="small"></div></div>
+      <div class="wordmark">Dukan AI</div>
+    </div>
+    <div class="sidebar-account">
+      <div class="avatar-circle" id="avatar-initial">?</div>
+      <div class="account-name" id="sidebar-account-name">...</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="nav-item">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7M5 10v10h14V10"/></svg>
+        <span data-i18n="nav.home">Bosh sahifa</span>
+      </a>
+      <span class="nav-item disabled">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-8.9 8.49 8.6 8.6 0 0 1-3.36-.69L3 21l1.7-5.74A8.5 8.5 0 1 1 21 11.5Z"/></svg>
+        <span data-i18n="nav.inbox">Suhbatlar</span>
+        <span class="soon-badge" data-i18n="nav.soon">tez kunda</span>
+      </span>
+      <a href="/dashboard/automations" class="nav-item">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>
+        <span data-i18n="nav.automation">Avtomatlashtirish</span>
+      </a>
+      <a href="/dashboard/settings" class="nav-item active">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        <span data-i18n="nav.settings">Sozlamalar</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="lang-switch"></div>
+      <button class="logout-link" id="logout" data-i18n="sidebar.logout">Chiqish</button>
+    </div>
+  </aside>
+
+  <main>
+    <div id="loading" data-i18n="common.loading">Yuklanmoqda...</div>
+
+    <div id="content" style="display:none">
+      <h1 data-i18n="settings.title">Sozlamalar</h1>
+      <p class="sub" data-i18n="settings.sub">Akkountingiz va ulanishlaringizni shu yerdan boshqaring.</p>
+
+      <div class="card">
+        <h3 data-i18n="settings.account">Akkount</h3>
+        <div class="row"><span class="row-label" data-i18n="settings.name">Ism</span><span class="row-value" id="f-owner_name"></span></div>
+        <div class="row"><span class="row-label" data-i18n="settings.email">Email</span><span class="row-value" id="f-email"></span></div>
+        <div class="row"><span class="row-label" data-i18n="settings.phone">Telefon</span><span class="row-value" id="f-phone"></span></div>
+        <div class="row"><span class="row-label" data-i18n="settings.language">Til</span><div id="lang-switch-settings" style="width:150px"></div></div>
+      </div>
+
+      <div class="card">
+        <h3 data-i18n="settings.connections">Ulanishlar</h3>
+        <div class="conn-row">
+          <div class="conn-label"><span class="conn-dot" id="tg-dot"></span> <span data-i18n="settings.telegramBot">Telegram bot</span></div>
+          <div id="tg-action"></div>
+        </div>
+        <div class="conn-row">
+          <div class="conn-label"><span class="conn-dot" id="ig-dot"></span> <span data-i18n="settings.instagram">Instagram</span></div>
+          <div id="ig-action"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/static/i18n.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function connBadge(connected) {
+    const span = document.createElement('span');
+    span.className = 'badge' + (connected ? ' on' : '');
+    span.textContent = connected ? Dukan18n.t('common.connected') : Dukan18n.t('common.notConnected');
+    return span;
+  }
+
+  async function init() {
+    Dukan18n.initI18n('lang-switch');
+    Dukan18n.initI18n('lang-switch-settings');
+
+    const res = await fetch('/auth/me', { credentials: 'same-origin' });
+    if (!res.ok) {
+      window.location.href = '/signup';
+      return;
+    }
+    const merchant = await res.json();
+    Dukan18n.syncLangFromMerchant(merchant.ui_language, (lang) => {
+      fetch('/auth/me', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ui_language: lang }),
+      });
+    });
+
+    const name = merchant.owner_name || '';
+    $('sidebar-account-name').textContent = merchant.name || name || merchant.email || Dukan18n.t('common.account');
+    $('avatar-initial').textContent = (name || merchant.email || '?').charAt(0).toUpperCase();
+
+    $('f-owner_name').textContent = merchant.owner_name || '—';
+    $('f-email').textContent = merchant.email || '—';
+    $('f-phone').textContent = merchant.phone_number || '—';
+
+    $('tg-dot').classList.toggle('on', merchant.telegram_connected);
+    $('tg-action').appendChild(connBadge(merchant.telegram_connected));
+    if (!merchant.telegram_connected) {
+      const btn = document.createElement('a');
+      btn.href = 'https://t.me/DukanAI_bot?start=' + merchant.webhook_slug;
+      btn.target = '_blank';
+      btn.rel = 'noopener';
+      btn.innerHTML = '<button class="btn-small" style="margin-left:10px">' + Dukan18n.t('common.connect') + '</button>';
+      $('tg-action').appendChild(btn);
+    }
+
+    $('ig-dot').classList.toggle('on', merchant.instagram_connected);
+    $('ig-action').appendChild(connBadge(merchant.instagram_connected));
+    if (!merchant.instagram_connected) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-small';
+      btn.style.marginLeft = '10px';
+      btn.textContent = Dukan18n.t('common.connect');
+      btn.addEventListener('click', () => {
+        window.location.href = '/instagram/connect/' + merchant.webhook_slug;
+      });
+      $('ig-action').appendChild(btn);
+    }
+
+    $('loading').style.display = 'none';
+    $('content').style.display = 'block';
+  }
+
+  $('logout').addEventListener('click', async () => {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    window.location.href = '/signup';
+  });
+
+  init();
+</script>
+</body>
+</html>

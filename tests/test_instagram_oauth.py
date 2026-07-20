@@ -8,10 +8,12 @@ the real Meta exchange is exercised manually with our own IG account
 import datetime as dt
 from urllib.parse import parse_qs, urlparse
 
+import httpx
 import pytest
 
 import app.instagram.router as instagram_router_module
 from app.config import settings
+from app.instagram.client import InstagramClient
 from app.instagram.oauth import InstagramCredentials
 from app.redis_client import get_redis
 
@@ -74,6 +76,27 @@ def test_callback_stores_credentials(client, oauth_settings, stub_exchange, rout
 def test_callback_rejects_unknown_state(client, oauth_settings, stub_exchange, routed_session):
     response = client.get("/instagram/oauth/callback", params={"code": "auth-code-42", "state": "never-issued"})
     assert response.status_code == 400
+
+
+def test_callback_surfaces_subscribe_failure_but_keeps_the_connection(
+    client, oauth_settings, stub_exchange, routed_session, routed_merchant, monkeypatch
+):
+    # The token exchange succeeding and the account being subscribed to
+    # webhooks are two separate Graph calls (app/instagram/client.py's
+    # subscribe_webhooks) - a failure in the second must not undo the
+    # first, since the connection is still useful for the media picker
+    # and manual sends even without live comment events.
+    def _fail_subscribe(self, fields="comments"):
+        raise httpx.HTTPStatusError("bad token", request=None, response=None)
+
+    monkeypatch.setattr(InstagramClient, "subscribe_webhooks", _fail_subscribe)
+    get_redis().set("ig_oauth_state:state-sub-fail", str(routed_merchant.id), ex=60)
+
+    response = client.get("/instagram/oauth/callback", params={"code": "auth-code-42", "state": "state-sub-fail"})
+
+    assert response.status_code == 200
+    assert "webhook subscription failed" in response.text
+    assert routed_merchant.instagram_user_id == CONNECTED_IG_USER_ID  # connection itself still saved
 
 
 def test_callback_rejects_ig_account_already_connected_elsewhere(

@@ -124,6 +124,90 @@ def test_valid_token_creates_merchant_and_admin_and_advances_state(db_session, m
     assert merchant.name == "Fake Shop Bot"  # prefilled from getMe's first_name
 
 
+def test_start_with_connect_token_binds_session_to_web_signup_merchant(db_session):
+    merchant = Merchant(email="signup@example.com", owner_name="Nozima", webhook_secret="s")
+    db_session.add(merchant)
+    db_session.flush()
+
+    service.handle_start(db_session, 800030, chat_id=800030, connect_token=merchant.webhook_slug)
+
+    session = db_session.get(PlatformOnboardingSession, 800030)
+    assert session.merchant_id == merchant.id
+
+
+def test_start_with_connect_token_for_already_connected_merchant_is_refused(db_session):
+    merchant = Merchant(email="taken@example.com", telegram_bot_id=555, telegram_bot_token="tok", webhook_secret="s")
+    db_session.add(merchant)
+    db_session.flush()
+
+    service.handle_start(db_session, 800031, chat_id=800031, connect_token=merchant.webhook_slug)
+
+    # Refused before ever creating an onboarding session.
+    assert db_session.get(PlatformOnboardingSession, 800031) is None
+
+
+def test_start_with_unknown_connect_token_falls_back_to_normal_flow(db_session):
+    service.handle_start(db_session, 800032, chat_id=800032, connect_token="not-a-real-slug")
+
+    session = db_session.get(PlatformOnboardingSession, 800032)
+    assert session is not None
+    assert session.merchant_id is None
+
+
+def test_valid_token_after_connect_token_attaches_bot_to_existing_merchant(db_session, monkeypatch):
+    merchant = Merchant(email="signup2@example.com", owner_name="Dilnoza", webhook_secret="s")
+    db_session.add(merchant)
+    db_session.flush()
+    merchant_id = merchant.id
+
+    monkeypatch.setattr(
+        service,
+        "_validate_token",
+        lambda token: {"id": 999888800, "first_name": "Linked Bot", "username": "linked_bot"},
+    )
+
+    service.handle_start(db_session, 800033, chat_id=800033, connect_token=merchant.webhook_slug)
+    service.handle_platform_callback(db_session, 800033, chat_id=800033, callback_data="lang:uz")
+    service.handle_platform_message(db_session, 800033, chat_id=800033, message_id=1, text="fake-linked-token")
+    db_session.flush()
+
+    session = db_session.get(PlatformOnboardingSession, 800033)
+    assert session.state == service.STATE_AWAITING_SHOP_NAME
+    assert session.merchant_id == merchant_id
+
+    # No second Merchant row was created - the web account was updated in place.
+    assert db_session.query(Merchant).filter_by(email="signup2@example.com").count() == 1
+
+    merchant = db_session.get(Merchant, merchant_id)
+    assert merchant.telegram_bot_id == 999888800
+    assert merchant.name == "Linked Bot"  # prefilled since website signup never asked for shop name
+
+    admin = db_session.query(MerchantAdmin).filter_by(telegram_user_id=800033).first()
+    assert admin is not None
+    assert admin.merchant_id == merchant_id
+
+
+def test_valid_token_preserves_existing_shop_name_on_linked_merchant(db_session, monkeypatch):
+    merchant = Merchant(email="signup3@example.com", name="Already Named Shop", webhook_secret="s")
+    db_session.add(merchant)
+    db_session.flush()
+    merchant_id = merchant.id
+
+    monkeypatch.setattr(
+        service,
+        "_validate_token",
+        lambda token: {"id": 999888801, "first_name": "Bot Name", "username": "bot_name"},
+    )
+
+    service.handle_start(db_session, 800034, chat_id=800034, connect_token=merchant.webhook_slug)
+    service.handle_platform_callback(db_session, 800034, chat_id=800034, callback_data="lang:uz")
+    service.handle_platform_message(db_session, 800034, chat_id=800034, message_id=1, text="fake-token-3")
+    db_session.flush()
+
+    merchant = db_session.get(Merchant, merchant_id)
+    assert merchant.name == "Already Named Shop"  # not clobbered by getMe's first_name
+
+
 def test_shop_name_confirm_keeps_the_prefilled_name(db_session, monkeypatch):
     monkeypatch.setattr(
         service, "_validate_token", lambda token: {"id": 999888790, "first_name": "Prefill Bot", "username": "p_bot"}

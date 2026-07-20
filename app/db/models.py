@@ -34,15 +34,48 @@ class Merchant(Base):
     __tablename__ = "merchants"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    name: Mapped[str] = mapped_column(String(255))
+    # Shop name. Nullable: since the website signup flow (app/auth/) creates
+    # the Merchant row before any Telegram bot is connected, this isn't
+    # known at creation time anymore - it's collected later, during tenant
+    # bot onboarding (app/onboarding/service.py) same as before.
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # The signup account holder's own name (Nozima, not "Nozima's Shop") -
+    # distinct from `name` above. Collected at signup (app/auth/), never
+    # touched by the Telegram onboarding flow.
+    owner_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Website signup identity (app/auth/). Unique but nullable: merchants
+    # seeded pre-signup (scripts/seed_merchant.py) or created by the old
+    # Telegram-first path won't have one.
+    email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)
+    # Captured as plain data at signup, intentionally unverified (product
+    # decision: OTP verification is email-only, phone is just a contact
+    # field) - not unique, not used for login.
+    phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # PBKDF2-HMAC-SHA256, stdlib hashlib only (no bcrypt/argon2 dependency
+    # needed at this scale) - "$"-joined iterations/salt/hash, see
+    # app/auth/passwords.py. Set at signup; the one-time email code
+    # (EmailVerificationCode below) proves address ownership, it does not
+    # log the merchant in by itself anymore - see app/auth/service.py.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    # Website UI language ('uz' | 'ru' | 'en') - distinct from
+    # Customer.preferred_language (the end customer's chat language) and
+    # from the reply-copy language picked at match time
+    # (app/nlp/transliteration.py's detected_language). This one only
+    # controls which language the merchant's OWN dashboard chrome renders
+    # in (app/web/static/i18n.js); defaults to 'uz' since that's this
+    # product's home market.
+    ui_language: Mapped[str] = mapped_column(String(8), default="uz", server_default="uz")
     # Encrypted at rest (app/db/crypto.py) - the ORM attribute is still a
     # plain Python str everywhere it's read/written, only the DB column
     # holds ciphertext. NOT unique: Fernet is randomized (fresh IV per
     # call), so encrypting the same token twice produces different
     # ciphertext - a DB-level unique constraint here would silently stop
     # enforcing "this bot isn't already registered". telegram_bot_id
-    # below is the real uniqueness key.
-    telegram_bot_token: Mapped[str] = mapped_column(EncryptedString)
+    # below is the real uniqueness key. Nullable for the same reason as
+    # `name` above - not known until the merchant connects a tenant bot,
+    # which now happens after website signup, not instead of it.
+    telegram_bot_token: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     # The bot's own numeric Telegram ID (from getMe during onboarding
     # token validation - see app/onboarding/service.py). Not sensitive,
     # not encrypted, immutable - the actual uniqueness key for "is this
@@ -53,10 +86,16 @@ class Merchant(Base):
     # Random identifier used in the tenant webhook URL
     # (/telegram/webhook/tenant/{webhook_slug}), decoupled from the
     # merchant's real primary key so it can be rotated independently.
+    # Always generated up front (even before a bot token exists) since it's
+    # also the capability token the website's "connect Instagram"/"connect
+    # Telegram" buttons link through - see app/instagram/router.py.
     webhook_slug: Mapped[str] = mapped_column(
         String(64), unique=True, index=True, default=lambda: secrets.token_urlsafe(24)
     )
-    webhook_secret: Mapped[str] = mapped_column(String(255))
+    # Generated up front alongside webhook_slug (not nullable - costs
+    # nothing to generate before a bot token exists, and every tenant
+    # webhook route already assumes it's set).
+    webhook_secret: Mapped[str] = mapped_column(String(255), default=lambda: secrets.token_urlsafe(32))
     # Set during onboarding (app/onboarding/service.py) - clothing /
     # cosmetics / other / courses for now. Nullable: not collected before
     # that onboarding step completes, and older merchants seeded manually
@@ -394,6 +433,16 @@ class Flow(Base):
     # "media_ids": [...] (optional - absent/empty = all posts; else the
     # rule only fires on comments under those IG media ids)}.
     response_config: Mapped[dict] = mapped_column(JSONB)
+    # On/off toggle for merchant-installed automations (app/automations/) -
+    # match_flow filters on this so a deactivated rule stops firing without
+    # deleting it (keeps its stats/history). Rows from scripts/load_flows
+    # (hand-written YAML, no installer UI) default to active.
+    is_active: Mapped[bool] = mapped_column(default=True, server_default="true")
+    # Which app/flows/templates.py preset this row was installed from, or
+    # None for hand-written rows (scripts/load_flows) - drives the
+    # dashboard's "installed" badge and (later) preset-upgrade tooling.
+    # Not a FK: presets are code, not a DB table (see templates.py).
+    template_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
     merchant: Mapped["Merchant"] = relationship(back_populates="flows")
@@ -457,3 +506,49 @@ class CommentEvent(Base):
     status: Mapped[str] = mapped_column(String(16), default="pending")
     created_at: Mapped[datetime] = mapped_column(default=_now)
     replied_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class EmailVerificationCode(Base):
+    """A one-time 6-digit code for the website's passwordless signup/login
+    (app/auth/) - sent to `email` via Resend, proves the address AND logs
+    the merchant in, so there's no separate password to manage.
+
+    Only `code_hash` (sha256) is stored, never the plaintext code - same
+    reasoning as not storing plaintext bot tokens, just cheaper (no need
+    for reversible decryption; verification only ever compares hashes).
+    `email` is denormalized here rather than requiring merchant_id up
+    front: request-code creates this row (and a not-yet-verified Merchant,
+    via get-or-create) in the same step, so both are set together.
+    """
+
+    __tablename__ = "email_verification_codes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    # Wrong-code guesses against this row - checked against a small cap
+    # (app/auth/service.py) so a code isn't brute-forceable within its
+    # short expiry window.
+    attempts: Mapped[int] = mapped_column(default=0)
+    expires_at: Mapped[datetime] = mapped_column()
+    consumed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
+class WebSession(Base):
+    """A logged-in website session for a merchant (app/auth/) - opaque
+    bearer token in an httponly cookie, DB-backed (not a signed JWT) so a
+    session can be revoked (logout) by deleting/marking the row instead of
+    needing a blocklist. Only `token_hash` (sha256) is stored, matching
+    EmailVerificationCode - the raw token lives only in the cookie.
+    """
+
+    __tablename__ = "web_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column()
+    revoked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)

@@ -18,6 +18,7 @@ import json
 import logging
 import secrets
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from sqlalchemy import select
@@ -27,6 +28,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db.models import CommentEvent, Merchant
 from app.db.session import get_db
+from app.instagram.client import InstagramClient
 from app.instagram.oauth import build_authorize_url, exchange_code
 from app.instagram.queue import enqueue_comment
 from app.redis_client import get_redis
@@ -62,6 +64,35 @@ def _signature_is_valid(raw_body: bytes, signature_header: str | None) -> bool:
     return hmac.compare_digest(signature_header.removeprefix("sha256="), expected)
 
 
+def _insert_event(
+    db: Session,
+    merchant: Merchant,
+    channel: str,
+    external_id: str,
+    commenter_id: str,
+    media_id: str | None,
+    raw_text: str | None,
+) -> str | None:
+    """Shared dedupe-insert for both comment and story-reply events -
+    same table, same unique constraint, same queue (app/instagram/queue.py),
+    just a different channel tag (see CommentEvent's docstring)."""
+    inserted_id = db.execute(
+        insert(CommentEvent)
+        .values(
+            merchant_id=merchant.id,
+            channel=channel,
+            external_id=external_id,
+            commenter_id=commenter_id,
+            media_id=media_id,
+            raw_text=raw_text,
+            status="pending",
+        )
+        .on_conflict_do_nothing(constraint="uq_comment_events_merchant_external")
+        .returning(CommentEvent.id)
+    ).scalar()
+    return str(inserted_id) if inserted_id is not None else None  # None = duplicate delivery, already recorded
+
+
 @router.post("/instagram/webhook")
 async def receive_webhook(request: Request, db: Session = Depends(get_db)) -> dict:
     raw_body = await request.body()
@@ -81,36 +112,63 @@ async def receive_webhook(request: Request, db: Session = Depends(get_db)) -> di
             continue
 
         for change in entry.get("changes", []):
-            if change.get("field") != "comments":
-                continue
+            field = change.get("field")
             value = change.get("value", {})
-            comment_id = value.get("id")
-            commenter_id = str((value.get("from") or {}).get("id", ""))
-            if not comment_id or not commenter_id:
-                logger.warning("instagram comment change missing id/from for merchant %s", merchant.id)
-                continue
-            if commenter_id == entry_id:
-                # Loop guard: our own public replies arrive back on this
-                # webhook. Dropped at ingress so they never occupy a
-                # comment_events row or a queue slot.
-                continue
 
-            inserted_id = db.execute(
-                insert(CommentEvent)
-                .values(
-                    merchant_id=merchant.id,
+            if field == "comments":
+                comment_id = value.get("id")
+                commenter_id = str((value.get("from") or {}).get("id", ""))
+                if not comment_id or not commenter_id:
+                    logger.warning("instagram comment change missing id/from for merchant %s", merchant.id)
+                    continue
+                if commenter_id == entry_id:
+                    # Loop guard: our own public replies arrive back on
+                    # this webhook. Dropped at ingress so they never
+                    # occupy a comment_events row or a queue slot.
+                    continue
+                inserted_id = _insert_event(
+                    db,
+                    merchant,
                     channel="instagram_comment",
                     external_id=str(comment_id),
                     commenter_id=commenter_id,
                     media_id=str((value.get("media") or {}).get("id", "")) or None,
                     raw_text=value.get("text"),
-                    status="pending",
                 )
-                .on_conflict_do_nothing(constraint="uq_comment_events_merchant_external")
-                .returning(CommentEvent.id)
-            ).scalar()
-            if inserted_id is not None:  # None = duplicate delivery, already recorded
-                enqueued_ids.append(str(inserted_id))
+
+            elif field == "messages":
+                message = value.get("message") or {}
+                story = (message.get("reply_to") or {}).get("story")
+                if story is None:
+                    # A plain DM, not a story reply - conversation-state
+                    # DM automation is a separate, not-yet-built feature
+                    # (needs thread tracking; see the MVP plan). Drop it
+                    # here rather than half-processing it.
+                    continue
+                message_id = message.get("mid") or message.get("id")
+                sender_id = str((value.get("sender") or {}).get("id", ""))
+                if not message_id or not sender_id:
+                    logger.warning("instagram story-reply change missing id/sender for merchant %s", merchant.id)
+                    continue
+                if sender_id == entry_id:
+                    # Loop guard, mirrors the comments branch above - our
+                    # own sent messages must never re-trigger a reply.
+                    continue
+                inserted_id = _insert_event(
+                    db,
+                    merchant,
+                    channel="instagram_story_reply",
+                    external_id=str(message_id),
+                    commenter_id=sender_id,
+                    media_id=story.get("id"),
+                    raw_text=message.get("text"),
+                )
+
+            else:
+                continue
+
+            if inserted_id is not None:
+                enqueued_ids.append(inserted_id)
 
     db.commit()
     # Enqueue only after the rows are durably committed - a worker that
@@ -178,5 +236,20 @@ def oauth_callback(
     merchant.instagram_access_token = credentials.access_token
     merchant.instagram_token_expires_at = credentials.expires_at
     db.commit()
+
+    # The app-level webhook URL (Meta App Dashboard, verified by
+    # verify_webhook above) only proves Meta CAN reach us - nothing is
+    # actually sent for THIS account until it's individually subscribed.
+    # Best-effort: the token connection itself already succeeded and is
+    # still useful (media picker, manual sends) even if this one call
+    # fails, so a Graph hiccup here shouldn't undo the whole connect.
+    try:
+        InstagramClient(credentials.access_token).subscribe_webhooks(fields="comments,messages")
+    except httpx.HTTPError:
+        logger.exception("failed to subscribe merchant %s to Instagram webhooks", merchant.id)
+        return PlainTextResponse(
+            "Instagram account connected, but webhook subscription failed - comment automation "
+            "will not receive events yet. Try reconnecting, or contact support."
+        )
 
     return PlainTextResponse("Instagram account connected. You can close this page.")

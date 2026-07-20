@@ -1,13 +1,17 @@
-"""Worker-side processing of one Instagram comment event - everything
-that happens after the webhook's dedupe-insert (app/instagram/router.py):
-staleness check, normalization, channel-scoped flow matching, rate-budget
-consumption, and the Graph API replies.
+"""Worker-side processing of one Instagram comment/story-reply event -
+everything that happens after the webhook's dedupe-insert
+(app/instagram/router.py): staleness check, normalization, channel-scoped
+flow matching, rate-budget consumption, and the Graph API replies. Both
+event kinds share this table and pipeline (see CommentEvent's docstring);
+they only diverge at the reply step (comment_id-authorized private reply
+vs a plain message send) and the public-reply tier (comments only).
 
-Two-tier matching, per the product decision: the private DM fires on any
-keyword substring match (catches agglutinative forms - "narxi qancha?"),
-but the VISIBLE public reply only fires when the comment is essentially
-just the keyword - so a complaint that merely contains "narx" gets a
-quiet, relevant DM instead of a cheery public bot reply under it.
+Two-tier matching for comments, per the product decision: the private DM
+fires on any keyword substring match (catches agglutinative forms -
+"narxi qancha?"), but the VISIBLE public reply only fires when the
+comment is essentially just the keyword - so a complaint that merely
+contains "narx" gets a quiet, relevant DM instead of a cheery public bot
+reply under it. Story replies have no public-reply tier at all.
 """
 
 import datetime as dt
@@ -33,6 +37,10 @@ logger = logging.getLogger(__name__)
 # (comment_events.created_at), which trails the comment itself by seconds -
 # close enough for a boundary whose failure mode is one rejected API call.
 REPLY_WINDOW = dt.timedelta(days=7)
+# Story replies aren't the special comment-private-reply grant - they're
+# an ordinary message thread, so the standard 24h messaging window
+# applies instead of the 7-day comment one.
+STORY_REPLY_WINDOW = dt.timedelta(hours=24)
 
 
 def process_comment_event(
@@ -55,7 +63,8 @@ def process_comment_event(
     if merchant is None or not merchant.instagram_access_token:
         return _finish(db, event, "failed")
 
-    if _now() - _as_utc(event.created_at) > REPLY_WINDOW:
+    reply_window = REPLY_WINDOW if event.channel == "instagram_comment" else STORY_REPLY_WINDOW
+    if _now() - _as_utc(event.created_at) > reply_window:
         # Older than the private-reply window - the API would reject the
         # DM anyway. Counted so it can be surfaced to the merchant later.
         return _finish(db, event, "dropped_stale")
@@ -70,7 +79,7 @@ def process_comment_event(
         db,
         merchant.id,
         result.normalized_text,
-        channel="instagram_comment",
+        channel=event.channel,
         media_id=event.media_id,
     )
     if flow is None:
@@ -92,13 +101,22 @@ def process_comment_event(
     if client is None:
         client = InstagramClient(merchant.instagram_access_token)
     try:
-        client.send_private_reply(event.external_id, dm_text)
+        if event.channel == "instagram_comment":
+            # Authorized via comment_id - works even though the commenter
+            # never messaged us first (Meta's private-reply grant).
+            client.send_private_reply(event.external_id, dm_text)
+        else:
+            # A story reply already opened an ordinary message thread -
+            # reply to the sender directly, same as any inbound DM.
+            client.send_message(event.commenter_id, dm_text)
     except Exception:
         logger.exception("private reply failed for comment event %s", event.id)
         return _finish(db, event, "failed")
 
+    # Public replies only exist on the comment channel - a story reply
+    # has no "under the comment" surface to post to.
     public_reply = config.get("public_reply")
-    if public_reply and _is_exact_keyword_match(result.normalized_text, flow.trigger_value):
+    if event.channel == "instagram_comment" and public_reply and _is_exact_keyword_match(result.normalized_text, flow.trigger_value):
         public_text = select_reply_text(public_reply, language)
         try:
             client.reply_to_comment(event.external_id, public_text)

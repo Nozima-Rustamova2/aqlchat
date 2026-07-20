@@ -42,6 +42,7 @@ def match_flow(
             Flow.merchant_id == merchant_id,
             Flow.trigger_type == "keyword",
             Flow.channel == channel,
+            Flow.is_active.is_(True),
         )
     ).all()
 

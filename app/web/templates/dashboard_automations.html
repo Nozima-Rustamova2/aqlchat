@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avtomatlashtirish — Dukan AI</title>
+<meta name="theme-color" content="#FCF6EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14181F" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='12' fill='%231E4954'/%3E%3Ccircle cx='24' cy='24' r='7.5' fill='%23C9702E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  (function () {
+    var saved = localStorage.getItem('theme');
+    var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: oklch(0.975 0.012 75);
+    --surface: #fff;
+    --surface-alt: oklch(0.94 0.015 75);
+    --border: oklch(0.91 0.015 75);
+    --hairline: oklch(0.89 0.015 75);
+    --text: oklch(0.22 0.02 250);
+    --text-2: oklch(0.42 0.02 250);
+    --text-4: oklch(0.5 0.02 250);
+    --primary: oklch(0.32 0.06 200);
+    --primary-text: oklch(0.32 0.06 200);
+    --on-primary: #fff;
+    --primary-shadow: oklch(0.32 0.06 200 / 0.28);
+    --primary-border: oklch(0.32 0.06 200 / 0.35);
+    --accent: oklch(0.62 0.14 45);
+    --accent-tint: oklch(0.95 0.035 45);
+    --accent-text: oklch(0.5 0.14 45);
+    --ok: oklch(0.6 0.15 145);
+    --ok-tint: oklch(0.95 0.04 145);
+    --ok-text: oklch(0.45 0.13 145);
+    --sidebar: oklch(0.98 0.008 75);
+    --input-bg: oklch(0.97 0.012 75);
+    --input-border: oklch(0.9 0.015 75);
+    --error: oklch(0.55 0.19 25);
+    --overlay: oklch(0.1 0.01 250 / 0.5);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(0.16 0.015 250);
+    --surface: oklch(0.22 0.02 250);
+    --surface-alt: oklch(0.28 0.02 250);
+    --border: oklch(0.31 0.02 250);
+    --hairline: oklch(0.3 0.02 250);
+    --text: oklch(0.93 0.008 75);
+    --text-2: oklch(0.75 0.015 250);
+    --text-4: oklch(0.68 0.015 250);
+    --primary: oklch(0.42 0.07 200);
+    --primary-text: oklch(0.78 0.07 200);
+    --on-primary: #fff;
+    --primary-shadow: oklch(0.42 0.07 200 / 0.35);
+    --primary-border: oklch(0.6 0.07 200 / 0.4);
+    --accent: oklch(0.68 0.13 45);
+    --accent-tint: oklch(0.31 0.06 45);
+    --accent-text: oklch(0.82 0.11 45);
+    --ok: oklch(0.65 0.14 145);
+    --ok-tint: oklch(0.28 0.06 145);
+    --ok-text: oklch(0.78 0.1 145);
+    --sidebar: oklch(0.19 0.015 250);
+    --input-bg: oklch(0.2 0.02 250);
+    --input-border: oklch(0.34 0.02 250);
+    --error: oklch(0.68 0.18 25);
+    --overlay: oklch(0 0 0 / 0.6);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font-family: 'Manrope', sans-serif;
+    color: var(--text); background: var(--bg);
+  }
+  h1, h2, h3 { font-family: 'Sora', sans-serif; }
+  a { text-decoration: none; color: inherit; }
+  button { font-family: 'Manrope', sans-serif; }
+
+  .app-shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; flex-shrink: 0; background: var(--sidebar);
+    border-right: 1px solid var(--hairline);
+    display: flex; flex-direction: column; padding: 18px 14px;
+  }
+  .sidebar-brand { display: flex; align-items: center; gap: 9px; padding: 6px 8px 20px; }
+  .logo-mark { position: relative; width: 30px; height: 23px; flex-shrink: 0; }
+  .logo-mark .big { position: absolute; top: 0; left: 0; width: 21px; height: 21px; border-radius: 50%; background: var(--primary); }
+  .logo-mark .small { position: absolute; bottom: 0; right: 0; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); }
+  .wordmark { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 16.5px; letter-spacing: -0.01em; color: var(--primary-text); }
+  .sidebar-account {
+    display: flex; align-items: center; gap: 10px; padding: 10px 8px; margin-bottom: 14px;
+    border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+  }
+  .avatar-circle {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: var(--on-primary);
+    display: flex; align-items: center; justify-content: center; font-family: 'Sora', sans-serif;
+    font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .account-name { font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 11px; padding: 10px 10px; border-radius: 10px;
+    font-size: 14.5px; font-weight: 600; color: var(--text-2); cursor: pointer;
+  }
+  .nav-item svg { flex-shrink: 0; opacity: 0.75; }
+  .nav-item.active { background: var(--surface-alt); color: var(--primary-text); }
+  .nav-item.active svg { opacity: 1; }
+  .nav-item.disabled { color: var(--text-4); cursor: default; opacity: 0.6; }
+  .soon-badge {
+    margin-left: auto; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 999px;
+    background: var(--accent-tint); color: var(--accent-text);
+  }
+  .sidebar-footer { margin-top: auto; padding-top: 14px; }
+  .logout-link {
+    width: 100%; border: 1.5px solid var(--primary-border); background: transparent; color: var(--primary-text);
+    font-weight: 700; font-size: 13.5px; padding: 9px 12px; border-radius: 12px; cursor: pointer;
+  }
+
+  main { flex: 1; padding: clamp(24px, 4vw, 44px) clamp(20px, 4vw, 48px); max-width: 920px; }
+  h1 { font-weight: 800; font-size: 26px; margin: 0 0 4px; }
+  .sub { color: var(--text-2); font-size: 15px; margin: 0 0 28px; }
+  h2.section-title { font-size: 15px; margin: 28px 0 14px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-4); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+    padding: 20px 22px; margin-bottom: 14px;
+  }
+  .connect-cta { text-align: center; padding: 48px 24px; }
+  .connect-cta p { color: var(--text-2); margin: 0 0 18px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .tpl-card h3 { font-size: 16px; margin: 0 0 6px; }
+  .tpl-card p { font-size: 13.5px; color: var(--text-2); margin: 0 0 12px; line-height: 1.45; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .chip {
+    font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+    background: var(--surface-alt); color: var(--text-2);
+  }
+  .btn-primary {
+    font-weight: 700; font-size: 13.5px; padding: 9px 16px; border-radius: 12px; border: none; cursor: pointer;
+    background: var(--primary); color: var(--on-primary);
+  }
+  .btn-secondary {
+    font-weight: 700; font-size: 13.5px; padding: 9px 16px; border-radius: 12px; cursor: pointer;
+    background: transparent; color: var(--primary-text); border: 1.5px solid var(--primary-border);
+  }
+  .btn-danger { color: var(--error); background: transparent; border: 1.5px solid var(--error); }
+
+  .installed-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .installed-row .stat { font-size: 13px; color: var(--text-2); margin-top: 6px; }
+  .installed-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .toggle {
+    position: relative; width: 40px; height: 22px; border-radius: 999px; border: none; cursor: pointer;
+    background: var(--border); flex-shrink: 0;
+  }
+  .toggle.on { background: var(--ok); }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; transition: left 0.15s;
+  }
+  .toggle.on::after { left: 20px; }
+
+  /* modal */
+  .overlay {
+    display: none; position: fixed; inset: 0; background: var(--overlay); z-index: 50;
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: 20px; padding: 26px; width: 100%; max-width: 440px;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal h2 { font-size: 19px; margin: 0 0 4px; }
+  .modal .modal-sub { font-size: 13.5px; color: var(--text-2); margin: 0 0 18px; }
+  label { display: block; font-size: 13px; font-weight: 700; color: var(--text-2); margin: 0 0 6px; }
+  .field { margin-bottom: 16px; }
+  input[type=text], input[type=url] {
+    width: 100%; font-family: 'Manrope', sans-serif; font-size: 14.5px;
+    background: var(--input-bg); border: 1.5px solid var(--input-border);
+    border-radius: 12px; padding: 11px 13px; color: var(--text); outline: none;
+  }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .radio-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .radio-option { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; max-height: 280px; overflow-y: auto; }
+  .media-thumb {
+    position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer;
+    border: 2px solid transparent; background: var(--surface-alt);
+  }
+  .media-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .media-thumb.selected { border-color: var(--primary); }
+  .media-thumb.selected::after {
+    content: '✓'; position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--primary); color: var(--on-primary); font-size: 11px; display: flex;
+    align-items: center; justify-content: center;
+  }
+  .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .modal-actions button { flex: 1; }
+  .error { color: var(--error); font-size: 13px; margin: 0 0 12px; min-height: 1em; }
+  #loading { text-align: center; padding: 60px 20px; color: var(--text-4); }
+  .empty-note { font-size: 13.5px; color: var(--text-4); text-align: center; padding: 24px; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><div class="big"></div><div class="small"></div></div>
+      <div class="wordmark">Dukan AI</div>
+    </div>
+    <div class="sidebar-account">
+      <div class="avatar-circle" id="avatar-initial">?</div>
+      <div class="account-name" id="sidebar-account-name">...</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="nav-item">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7M5 10v10h14V10"/></svg>
+        <span data-i18n="nav.home">Bosh sahifa</span>
+      </a>
+      <span class="nav-item disabled">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-8.9 8.49 8.6 8.6 0 0 1-3.36-.69L3 21l1.7-5.74A8.5 8.5 0 1 1 21 11.5Z"/></svg>
+        <span data-i18n="nav.inbox">Suhbatlar</span>
+        <span class="soon-badge" data-i18n="nav.soon">tez kunda</span>
+      </span>
+      <a href="/dashboard/automations" class="nav-item active">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>
+        <span data-i18n="nav.automation">Avtomatlashtirish</span>
+      </a>
+      <a href="/dashboard/settings" class="nav-item">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        <span data-i18n="nav.settings">Sozlamalar</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="lang-switch"></div>
+      <button class="logout-link" id="logout" data-i18n="sidebar.logout">Chiqish</button>
+    </div>
+  </aside>
+
+  <main>
+    <div id="loading" data-i18n="common.loading">Yuklanmoqda...</div>
+
+    <div id="content" style="display:none">
+      <h1 data-i18n="auto.title">Avtomatlashtirish</h1>
+      <p class="sub" data-i18n="auto.sub">Instagram izohlariga avtomatik javob bering.</p>
+
+      <div id="not-connected" class="card connect-cta" style="display:none">
+        <p data-i18n="auto.connectFirst">Boshlash uchun avval Instagram akkountingizni ulang.</p>
+        <a href="#" id="connect-ig-link"><button class="btn-primary" data-i18n="auto.connectIg">Instagram-ni ulash</button></a>
+      </div>
+
+      <div id="connected-view" style="display:none">
+        <div id="installed-section" style="display:none">
+          <h2 class="section-title" data-i18n="auto.installed">O'rnatilgan</h2>
+          <div id="installed-list"></div>
+        </div>
+
+        <h2 class="section-title" data-i18n="auto.templates">Shablonlar</h2>
+        <div class="grid" id="template-grid"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div id="modal-step-1">
+      <h2 id="modal-title">O'rnatish</h2>
+      <p class="modal-sub" id="modal-description"></p>
+      <div class="error" id="modal-error-1"></div>
+      <div id="dynamic-fields"></div>
+      <div class="toggle-row" id="public-reply-row">
+        <label style="margin:0" data-i18n="auto.publicReplyLabel">Izoh ostida ochiq javob</label>
+        <button type="button" class="toggle on" id="public-reply-toggle"></button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="modal-cancel-1" data-i18n="auto.cancel">Bekor qilish</button>
+        <button class="btn-primary" id="modal-next" data-i18n="auto.next">Keyingi</button>
+      </div>
+    </div>
+
+    <div id="modal-step-2" style="display:none">
+      <h2 id="modal-step2-title">Postlarni tanlang</h2>
+      <p class="modal-sub" id="modal-step2-sub">Qaysi postlar ostidagi izohlarga ishlasin?</p>
+      <div class="error" id="modal-error-2"></div>
+      <div class="radio-row" id="scope-row">
+        <label class="radio-option"><input type="radio" name="scope" value="all" checked> <span data-i18n="auto.allPosts">Barcha postlar</span></label>
+        <label class="radio-option"><input type="radio" name="scope" value="specific"> <span data-i18n="auto.specificPosts">Tanlangan postlar</span></label>
+      </div>
+      <div class="media-grid" id="media-grid" style="display:none"></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="modal-back" data-i18n="auto.back">Orqaga</button>
+        <button class="btn-primary" id="modal-confirm" data-i18n="auto.activate">Faollashtirish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/i18n.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  let merchant = null;
+  let templates = [];
+  let installed = [];
+  let activeTemplateKey = null;
+  let collisionAcknowledged = false;
+  let selectedMediaIds = [];
+  let mediaLoaded = false;
+
+  async function api(path, options) {
+    const res = await fetch(path, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...options });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || Dukan18n.t('common.error'));
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  function chipList(items) {
+    return items.map((k) => `<span class="chip">${k}</span>`).join('');
+  }
+
+  function channelLabel(channel) {
+    return channel === 'instagram_story_reply' ? Dukan18n.t('auto.channelStory') : Dukan18n.t('auto.channelComment');
+  }
+
+  function renderInstalled() {
+    const section = $('installed-section');
+    const list = $('installed-list');
+    list.innerHTML = '';
+    if (installed.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+    for (const item of installed) {
+      const scope = item.channel === 'instagram_story_reply'
+        ? Dukan18n.t('auto.scopeAllStories')
+        : (item.media_ids.length > 0 ? `${item.media_ids.length} ta post` : Dukan18n.t('auto.scopeAllPosts'));
+      const statWord = item.channel === 'instagram_story_reply' ? Dukan18n.t('auto.statStory') : Dukan18n.t('auto.statComment');
+      const card = document.createElement('div');
+      card.className = 'card installed-row';
+      card.innerHTML = `
+        <div>
+          <h3 style="margin:0 0 6px;font-size:15px">${item.name} <span class="chip">${channelLabel(item.channel)}</span></h3>
+          <div class="chips">${chipList(item.keywords)}</div>
+          <div class="stat">${scope} • ${Dukan18n.t('auto.weekly')}: ${item.comments_7d} ${statWord} → ${item.dms_sent_7d} ${Dukan18n.t('auto.statDm')}</div>
+        </div>
+        <div class="installed-actions">
+          <button class="toggle ${item.is_active ? 'on' : ''}" data-id="${item.id}" data-action="toggle"></button>
+          <button class="btn-danger" data-id="${item.id}" data-action="delete" style="padding:6px 10px">${Dukan18n.t('auto.delete')}</button>
+        </div>`;
+      list.appendChild(card);
+    }
+    list.querySelectorAll('[data-action="toggle"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const item = installed.find((i) => i.id === id);
+        await api(`/automations/${id}`, { method: 'PATCH', body: JSON.stringify({ is_active: !item.is_active }) });
+        await loadInstalled();
+      });
+    });
+    list.querySelectorAll('[data-action="delete"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm(Dukan18n.t('auto.confirmDelete'))) return;
+        await api(`/automations/${btn.dataset.id}`, { method: 'DELETE' });
+        await loadInstalled();
+      });
+    });
+  }
+
+  function renderTemplates() {
+    const grid = $('template-grid');
+    grid.innerHTML = '';
+    for (const tpl of templates) {
+      const isInstalled = installed.some((i) => i.template_key === tpl.key);
+      const card = document.createElement('div');
+      card.className = 'card tpl-card';
+      card.innerHTML = `
+        <h3>${tpl.name} <span class="chip">${channelLabel(tpl.channel)}</span></h3>
+        <p>${tpl.description}</p>
+        <div class="chips">${chipList(tpl.keywords)}</div>
+        <button class="btn-primary" data-key="${tpl.key}">${isInstalled ? Dukan18n.t('auto.edit') : Dukan18n.t('auto.install')}</button>`;
+      grid.appendChild(card);
+    }
+    grid.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', () => openWizard(btn.dataset.key));
+    });
+  }
+
+  function openWizard(templateKey) {
+    activeTemplateKey = templateKey;
+    const tpl = templates.find((t) => t.key === templateKey);
+    const existing = installed.find((i) => i.template_key === templateKey);
+
+    $('modal-title').textContent = tpl.name;
+    $('modal-description').textContent = tpl.description;
+    $('modal-error-1').textContent = '';
+    $('modal-error-2').textContent = '';
+
+    const fieldsHost = $('dynamic-fields');
+    fieldsHost.innerHTML = '';
+    for (const field of tpl.fields) {
+      const wrap = document.createElement('div');
+      wrap.className = 'field';
+      const prefillLink = field.key === 'link' && !existing && merchant.telegram_bot_username
+        ? `https://t.me/${merchant.telegram_bot_username}`
+        : '';
+      const value = existing ? (field.key === 'link' ? existing.link : '') : prefillLink;
+      wrap.innerHTML = `<label>${field.label}</label><input type="text" data-field="${field.key}" value="${value || ''}">`;
+      fieldsHost.appendChild(wrap);
+    }
+
+    const isComment = tpl.channel === 'instagram_comment';
+
+    const toggle = $('public-reply-toggle');
+    const enabled = existing ? existing.public_reply_enabled : true;
+    toggle.classList.toggle('on', enabled);
+    $('public-reply-row').style.display = isComment ? 'flex' : 'none';
+
+    selectedMediaIds = isComment && existing ? [...existing.media_ids] : [];
+    document.querySelector(`input[name="scope"][value="${selectedMediaIds.length ? 'specific' : 'all'}"]`).checked = true;
+    $('media-grid').style.display = selectedMediaIds.length ? 'grid' : 'none';
+    $('scope-row').style.display = isComment ? 'flex' : 'none';
+    $('modal-step2-title').textContent = isComment ? Dukan18n.t('auto.step2TitleComment') : Dukan18n.t('auto.step2TitleStory');
+    $('modal-step2-sub').textContent = isComment
+      ? Dukan18n.t('auto.step2SubComment')
+      : Dukan18n.t('auto.step2SubStory');
+    mediaLoaded = false;
+    collisionAcknowledged = false;
+    $('modal-confirm').textContent = Dukan18n.t('auto.activate');
+
+    $('modal-step-1').style.display = 'block';
+    $('modal-step-2').style.display = 'none';
+    $('overlay').classList.add('open');
+  }
+
+  function keywordsForSubmission(fields) {
+    const tpl = templates.find((t) => t.key === activeTemplateKey);
+    const hasCustomKeyword = tpl.fields.some((f) => f.key === 'keyword');
+    return hasCustomKeyword ? [fields.keyword] : tpl.keywords;
+  }
+
+  function collidingAutomation(keywords) {
+    const tpl = templates.find((t) => t.key === activeTemplateKey);
+    const lowered = keywords.map((k) => k.toLowerCase());
+    return installed.find((item) => {
+      // Different channels are independent trigger surfaces (a comment
+      // and a story reply with the same word don't compete for the same
+      // event) - only same-channel keywords can actually collide.
+      if (item.template_key === activeTemplateKey || !item.is_active || item.channel !== tpl.channel) return false;
+      return item.keywords.some((k) => lowered.includes(k.toLowerCase()));
+    });
+  }
+
+  function closeWizard() {
+    $('overlay').classList.remove('open');
+  }
+
+  $('public-reply-toggle').addEventListener('click', () => {
+    $('public-reply-toggle').classList.toggle('on');
+  });
+
+  $('modal-cancel-1').addEventListener('click', closeWizard);
+  $('modal-back').addEventListener('click', () => {
+    $('modal-step-1').style.display = 'block';
+    $('modal-step-2').style.display = 'none';
+  });
+
+  $('modal-next').addEventListener('click', () => {
+    $('modal-error-1').textContent = '';
+    const fieldsHost = $('dynamic-fields');
+    for (const input of fieldsHost.querySelectorAll('[data-field]')) {
+      if (!input.value.trim()) {
+        $('modal-error-1').textContent = Dukan18n.t('auto.fillAllFields');
+        return;
+      }
+    }
+    $('modal-step-1').style.display = 'none';
+    $('modal-step-2').style.display = 'block';
+  });
+
+  document.querySelectorAll('input[name="scope"]').forEach((radio) => {
+    radio.addEventListener('change', async () => {
+      const specific = radio.value === 'specific' && radio.checked;
+      $('media-grid').style.display = specific ? 'grid' : 'none';
+      if (specific && !mediaLoaded) await loadMedia();
+    });
+  });
+
+  async function loadMedia() {
+    const grid = $('media-grid');
+    grid.innerHTML = `<div class="empty-note">${Dukan18n.t('common.loading')}</div>`;
+    try {
+      const page = await api('/instagram/media');
+      mediaLoaded = true;
+      grid.innerHTML = '';
+      for (const item of page.items) {
+        const thumb = document.createElement('div');
+        thumb.className = 'media-thumb' + (selectedMediaIds.includes(item.id) ? ' selected' : '');
+        thumb.dataset.id = item.id;
+        const img = item.thumbnail_url || item.media_url;
+        thumb.innerHTML = img ? `<img src="${img}" alt="">` : '';
+        thumb.addEventListener('click', () => {
+          const idx = selectedMediaIds.indexOf(item.id);
+          if (idx >= 0) selectedMediaIds.splice(idx, 1);
+          else selectedMediaIds.push(item.id);
+          thumb.classList.toggle('selected');
+        });
+        grid.appendChild(thumb);
+      }
+      if (page.items.length === 0) {
+        grid.innerHTML = '<div class="empty-note">Postlar topilmadi.</div>';
+      }
+    } catch (err) {
+      grid.innerHTML = '';
+      const reconnect = err.message === 'instagram_reconnect_required';
+      $('modal-error-2').textContent = reconnect ? Dukan18n.t('auto.reconnectRequired') : err.message;
+    }
+  }
+
+  $('modal-confirm').addEventListener('click', async () => {
+    $('modal-error-2').textContent = '';
+    const scope = document.querySelector('input[name="scope"]:checked').value;
+    const mediaIds = scope === 'specific' ? selectedMediaIds : [];
+    const fields = {};
+    $('dynamic-fields').querySelectorAll('[data-field]').forEach((input) => {
+      fields[input.dataset.field] = input.value.trim();
+    });
+    const publicReplyEnabled = $('public-reply-toggle').classList.contains('on');
+
+    if (!collisionAcknowledged) {
+      const collision = collidingAutomation(keywordsForSubmission(fields));
+      if (collision) {
+        $('modal-error-2').textContent = Dukan18n.t('auto.collisionWarning', { name: collision.name });
+        collisionAcknowledged = true;
+        $('modal-confirm').textContent = Dukan18n.t('auto.activateAnyway');
+        return;
+      }
+    }
+
+    $('modal-confirm').disabled = true;
+    try {
+      await api('/automations', {
+        method: 'POST',
+        body: JSON.stringify({
+          template_key: activeTemplateKey,
+          fields,
+          media_ids: mediaIds,
+          public_reply_enabled: publicReplyEnabled,
+        }),
+      });
+      closeWizard();
+      await loadInstalled();
+    } catch (err) {
+      $('modal-error-2').textContent = err.message;
+    } finally {
+      $('modal-confirm').disabled = false;
+    }
+  });
+
+  async function loadInstalled() {
+    installed = await api('/automations');
+    renderInstalled();
+    renderTemplates();
+  }
+
+  async function init() {
+    Dukan18n.initI18n('lang-switch');
+
+    const res = await fetch('/auth/me', { credentials: 'same-origin' });
+    if (!res.ok) {
+      window.location.href = '/signup';
+      return;
+    }
+    merchant = await res.json();
+    Dukan18n.syncLangFromMerchant(merchant.ui_language, (lang) => {
+      fetch('/auth/me', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ui_language: lang }),
+      });
+    });
+    $('sidebar-account-name').textContent = merchant.name || merchant.owner_name || merchant.email || Dukan18n.t('common.account');
+    $('avatar-initial').textContent = (merchant.owner_name || merchant.email || '?').charAt(0).toUpperCase();
+
+    $('loading').style.display = 'none';
+    $('content').style.display = 'block';
+
+    if (!merchant.instagram_connected) {
+      $('not-connected').style.display = 'block';
+      $('connect-ig-link').href = '/instagram/connect/' + merchant.webhook_slug;
+      return;
+    }
+
+    $('connected-view').style.display = 'block';
+    templates = await api('/automations/templates');
+    await loadInstalled();
+
+    const wantedTemplate = new URLSearchParams(window.location.search).get('template');
+    if (wantedTemplate && templates.some((t) => t.key === wantedTemplate)) {
+      openWizard(wantedTemplate);
+    }
+  }
+
+  $('logout').addEventListener('click', async () => {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    window.location.href = '/signup';
+  });
+
+  init();
+</script>
+</body>
+</html>

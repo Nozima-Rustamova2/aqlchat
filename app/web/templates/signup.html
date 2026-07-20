@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roʻyxatdan oʻtish — Dukan AI</title>
+<meta name="theme-color" content="#FCF6EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14181F" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='12' fill='%231E4954'/%3E%3Ccircle cx='24' cy='24' r='7.5' fill='%23C9702E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  (function () {
+    var saved = localStorage.getItem('theme');
+    var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: oklch(0.975 0.012 75);
+    --surface: #fff;
+    --surface-alt: oklch(0.94 0.015 75);
+    --border: oklch(0.91 0.015 75);
+    --text: oklch(0.22 0.02 250);
+    --text-2: oklch(0.42 0.02 250);
+    --text-4: oklch(0.5 0.02 250);
+    --primary: oklch(0.32 0.06 200);
+    --primary-text: oklch(0.32 0.06 200);
+    --on-primary: #fff;
+    --primary-shadow: oklch(0.32 0.06 200 / 0.28);
+    --primary-border: oklch(0.32 0.06 200 / 0.35);
+    --accent: oklch(0.62 0.14 45);
+    --accent-tint: oklch(0.95 0.035 45);
+    --accent-text: oklch(0.5 0.14 45);
+    --input-bg: oklch(0.97 0.012 75);
+    --input-border: oklch(0.9 0.015 75);
+    --error: oklch(0.55 0.19 25);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(0.16 0.015 250);
+    --surface: oklch(0.22 0.02 250);
+    --surface-alt: oklch(0.28 0.02 250);
+    --border: oklch(0.31 0.02 250);
+    --text: oklch(0.93 0.008 75);
+    --text-2: oklch(0.75 0.015 250);
+    --text-4: oklch(0.68 0.015 250);
+    --primary: oklch(0.42 0.07 200);
+    --primary-text: oklch(0.78 0.07 200);
+    --on-primary: #fff;
+    --primary-shadow: oklch(0.42 0.07 200 / 0.35);
+    --primary-border: oklch(0.6 0.07 200 / 0.4);
+    --accent: oklch(0.68 0.13 45);
+    --accent-tint: oklch(0.31 0.06 45);
+    --accent-text: oklch(0.82 0.11 45);
+    --input-bg: oklch(0.2 0.02 250);
+    --input-border: oklch(0.34 0.02 250);
+    --error: oklch(0.68 0.18 25);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font-family: 'Manrope', sans-serif;
+    color: var(--text); background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  h1, h2 { font-family: 'Sora', sans-serif; }
+  .brand { display: flex; align-items: center; gap: 9px; justify-content: center; margin-bottom: 28px; }
+  .logo-mark { position: relative; width: 34px; height: 26px; flex-shrink: 0; }
+  .logo-mark .big { position: absolute; top: 0; left: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--primary); }
+  .logo-mark .small { position: absolute; bottom: 0; right: 0; width: 15px; height: 15px; border-radius: 50%; background: var(--accent); }
+  .wordmark { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 19px; letter-spacing: -0.01em; color: var(--primary-text); }
+  .card {
+    width: 100%; max-width: 400px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 20px;
+    padding: clamp(24px, 5vw, 36px);
+    box-shadow: 0 20px 50px -25px oklch(0 0 0 / 0.25);
+  }
+  h2 { font-weight: 800; font-size: 24px; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .subhead { font-size: 14.5px; color: var(--text-2); margin: 0 0 24px; line-height: 1.5; }
+  label { display: block; font-size: 13px; font-weight: 700; color: var(--text-2); margin: 0 0 6px; }
+  .field { margin-bottom: 16px; }
+  input {
+    width: 100%; font-family: 'Manrope', sans-serif; font-size: 15px;
+    background: var(--input-bg); border: 1.5px solid var(--input-border);
+    border-radius: 12px; padding: 12px 14px; color: var(--text); outline: none;
+  }
+  input:focus { border-color: var(--primary-border); }
+  input.otp {
+    text-align: center; letter-spacing: 0.5em; font-size: 22px; font-weight: 700;
+    padding-left: 10px;
+  }
+  .btn-primary {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: 15.5px;
+    padding: 14px 20px; border-radius: 14px; border: none; cursor: pointer;
+    box-shadow: 0 8px 24px var(--primary-shadow); font-family: 'Manrope', sans-serif;
+  }
+  .btn-primary:disabled { opacity: 0.6; cursor: default; }
+  .btn-secondary {
+    width: 100%; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14.5px; padding: 13px 20px; border-radius: 14px;
+    color: var(--primary-text); border: 1.5px solid var(--primary-border);
+    background: transparent; cursor: pointer; font-family: 'Manrope', sans-serif;
+    margin-top: 10px;
+  }
+  .error { color: var(--error); font-size: 13.5px; margin: 0 0 14px; min-height: 1em; }
+  .hint { font-size: 12.5px; color: var(--text-4); margin-top: 10px; text-align: center; }
+  .link { color: var(--primary-text); font-weight: 700; cursor: pointer; }
+  .success-icon {
+    width: 52px; height: 52px; border-radius: 50%; background: var(--accent-tint);
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;
+  }
+  .step { display: none; }
+  .step.active { display: block; }
+</style>
+</head>
+<body>
+
+<div style="width:100%;max-width:400px">
+  <div class="brand">
+    <div class="logo-mark"><div class="big"></div><div class="small"></div></div>
+    <div class="wordmark">Dukan AI</div>
+  </div>
+  <div id="lang-switch" style="max-width:200px;margin:0 auto 20px"></div>
+
+  <div class="card">
+
+    <!-- Step 1: details -->
+    <section id="step-details" class="step active">
+      <h2 data-i18n="signup.title">Roʻyxatdan oʻtish</h2>
+      <p class="subhead" data-i18n="signup.subtitle">3 daqiqada, kartasiz. Keyin Telegram va Instagram akkauntlaringizni ulaysiz.</p>
+      <div class="error" id="details-error"></div>
+      <form id="form-details">
+        <div class="field">
+          <label for="owner_name" data-i18n="signup.name">Ismingiz</label>
+          <input type="text" id="owner_name" required autocomplete="name" placeholder="Nozima Rustamova">
+        </div>
+        <div class="field">
+          <label for="email" data-i18n="signup.email">Email</label>
+          <input type="email" id="email" required autocomplete="email" placeholder="siz@misol.uz">
+        </div>
+        <div class="field">
+          <label for="phone_number" data-i18n="signup.phone">Telefon raqami</label>
+          <input type="tel" id="phone_number" required autocomplete="tel" placeholder="+998 90 123 45 67">
+        </div>
+        <div class="field">
+          <label for="password" data-i18n="signup.password">Parol</label>
+          <input type="password" id="password" required minlength="8" autocomplete="new-password" data-i18n-placeholder="signup.passwordPlaceholder" placeholder="Kamida 8 ta belgi">
+        </div>
+        <div class="field">
+          <label for="password_confirm" data-i18n="signup.passwordConfirm">Parolni tasdiqlang</label>
+          <input type="password" id="password_confirm" required minlength="8" autocomplete="new-password" data-i18n-placeholder="signup.passwordConfirmPlaceholder" placeholder="Parolni qayta kiriting">
+        </div>
+        <button type="submit" class="btn-primary" id="details-submit" data-i18n="signup.submit">Roʻyxatdan oʻtish</button>
+      </form>
+      <p class="hint"><span data-i18n="signup.haveAccount">Allaqachon akkauntingiz bormi?</span> <span class="link" id="go-login" data-i18n="signup.login">Kirish</span></p>
+    </section>
+
+    <!-- Step 1b: login (email + password) -->
+    <section id="step-login" class="step">
+      <h2 data-i18n="login.title">Kirish</h2>
+      <p class="subhead" data-i18n="login.subtitle">Email va parolingiz bilan kiring.</p>
+      <div class="error" id="login-error"></div>
+      <form id="form-login">
+        <div class="field">
+          <label for="login_email" data-i18n="signup.email">Email</label>
+          <input type="email" id="login_email" required autocomplete="email" placeholder="siz@misol.uz">
+        </div>
+        <div class="field">
+          <label for="login_password" data-i18n="signup.password">Parol</label>
+          <input type="password" id="login_password" required autocomplete="current-password" placeholder="Parolingiz">
+        </div>
+        <button type="submit" class="btn-primary" id="login-submit" data-i18n="login.title">Kirish</button>
+      </form>
+      <p class="hint"><span data-i18n="login.noAccount">Akkountingiz yoʻqmi?</span> <span class="link" id="go-details" data-i18n="login.signup">Roʻyxatdan oʻtish</span></p>
+    </section>
+
+    <!-- Step 2: code -->
+    <section id="step-code" class="step">
+      <h2 data-i18n="code.title">Kodni kiriting</h2>
+      <p class="subhead" id="code-subtitle"></p>
+      <div class="error" id="code-error"></div>
+      <form id="form-code">
+        <div class="field">
+          <input type="text" id="code" class="otp" inputmode="numeric" pattern="[0-9]*" maxlength="6" required placeholder="000000">
+        </div>
+        <button type="submit" class="btn-primary" id="code-submit" data-i18n="code.submit">Tasdiqlash</button>
+      </form>
+      <p class="hint"><span data-i18n="code.resendHint">Kod kelmadimi?</span> <span class="link" id="resend-code" data-i18n="code.resend">Qayta yuborish</span></p>
+    </section>
+
+    <!-- Step 3: success -->
+    <section id="step-success" class="step">
+      <div class="success-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent-text)">
+          <path d="M20 6 9 17l-5-5"/>
+        </svg>
+      </div>
+      <h2 style="text-align:center" data-i18n="success.title">Xush kelibsiz!</h2>
+      <p class="subhead" style="text-align:center" data-i18n="success.subtitle">Akkountingiz tayyor. Endi ijtimoiy tarmoqlaringizni ulang.</p>
+      <button class="btn-primary" id="connect-instagram" data-i18n="success.connectInstagram">Instagram bilan ulash</button>
+      <a href="https://t.me/DukanAI_bot" id="connect-telegram" target="_blank" rel="noopener" style="text-decoration:none">
+        <button type="button" class="btn-secondary" data-i18n="success.connectTelegram">Telegram botni ulash</button>
+      </a>
+      <a href="/dashboard" style="text-decoration:none">
+        <button type="button" class="btn-secondary" data-i18n="success.openDashboard">Boshqaruv panelini ochish</button>
+      </a>
+    </section>
+
+  </div>
+</div>
+
+<script src="/static/i18n.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  function showStep(id) {
+    document.querySelectorAll('.step').forEach((el) => el.classList.remove('active'));
+    $(id).classList.add('active');
+  }
+
+  let pendingEmail = null;
+  let pendingSignupDetails = null;
+  let currentSlug = null;
+
+  // Deep link so the platform bot's /start knows which web account to
+  // attach to (same webhook_slug capability token as Instagram connect).
+  function setTelegramLink() {
+    if (currentSlug) $('connect-telegram').href = 'https://t.me/DukanAI_bot?start=' + currentSlug;
+  }
+
+  // The merchant may have picked uz/ru/en before an account even existed
+  // (this page has no session yet) - once one does, persist that choice
+  // instead of leaving the account stuck on the 'uz' default.
+  function syncLangToAccount(merchant) {
+    if (merchant.ui_language !== Dukan18n.getLang()) {
+      fetch('/auth/me', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ui_language: Dukan18n.getLang() }),
+      });
+    }
+  }
+
+  async function postJSON(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || Dukan18n.t('common.error'));
+    return data;
+  }
+
+  Dukan18n.initI18n('lang-switch');
+
+  $('go-login').addEventListener('click', () => showStep('step-login'));
+  $('go-details').addEventListener('click', () => showStep('step-details'));
+
+  $('form-details').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('details-error').textContent = '';
+    const password = $('password').value;
+    if (password !== $('password_confirm').value) {
+      $('details-error').textContent = Dukan18n.t('signup.passwordMismatch');
+      return;
+    }
+    $('details-submit').disabled = true;
+    try {
+      const owner_name = $('owner_name').value.trim();
+      const email = $('email').value.trim();
+      const phone_number = $('phone_number').value.trim();
+      pendingSignupDetails = { owner_name, email, phone_number, password };
+      await postJSON('/auth/signup', pendingSignupDetails);
+      pendingEmail = email;
+      $('code-subtitle').textContent = Dukan18n.t('code.subtitle', { email: email });
+      showStep('step-code');
+    } catch (err) {
+      $('details-error').textContent = err.message;
+    } finally {
+      $('details-submit').disabled = false;
+    }
+  });
+
+  $('form-login').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('login-error').textContent = '';
+    $('login-submit').disabled = true;
+    try {
+      const email = $('login_email').value.trim();
+      const password = $('login_password').value;
+      const merchant = await postJSON('/auth/login', { email, password });
+      currentSlug = merchant.webhook_slug;
+      setTelegramLink();
+      syncLangToAccount(merchant);
+      showStep('step-success');
+    } catch (err) {
+      $('login-error').textContent = err.message;
+    } finally {
+      $('login-submit').disabled = false;
+    }
+  });
+
+  $('form-code').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('code-error').textContent = '';
+    $('code-submit').disabled = true;
+    try {
+      const code = $('code').value.trim();
+      const merchant = await postJSON('/auth/verify', { email: pendingEmail, code });
+      currentSlug = merchant.webhook_slug;
+      setTelegramLink();
+      syncLangToAccount(merchant);
+      showStep('step-success');
+    } catch (err) {
+      $('code-error').textContent = err.message;
+    } finally {
+      $('code-submit').disabled = false;
+    }
+  });
+
+  $('resend-code').addEventListener('click', async () => {
+    $('code-error').textContent = '';
+    try {
+      await postJSON('/auth/signup', pendingSignupDetails);
+      $('code-error').textContent = Dukan18n.t('code.resent');
+    } catch (err) {
+      $('code-error').textContent = err.message;
+    }
+  });
+
+  $('connect-instagram').addEventListener('click', () => {
+    if (currentSlug) window.location.href = '/instagram/connect/' + currentSlug;
+  });
+</script>
+</body>
+</html>

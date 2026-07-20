@@ -30,6 +30,7 @@ class StubClient:
         self.fail_public = fail_public
         self.private_calls: list[tuple[str, str]] = []
         self.public_calls: list[tuple[str, str]] = []
+        self.message_calls: list[tuple[str, str]] = []
 
     def send_private_reply(self, comment_id: str, text: str) -> dict:
         if self.fail_private:
@@ -41,6 +42,12 @@ class StubClient:
         if self.fail_public:
             raise RuntimeError("graph api down")
         self.public_calls.append((comment_id, text))
+        return {}
+
+    def send_message(self, recipient_id: str, text: str) -> dict:
+        if self.fail_private:
+            raise RuntimeError("graph api down")
+        self.message_calls.append((recipient_id, text))
         return {}
 
 
@@ -77,6 +84,41 @@ def _make_price_flow(db, merchant_id):
         ["narx", "narxi", "цена"],
         channel="instagram_comment",
         response_config=IG_RESPONSE_CONFIG,
+    )
+
+
+STORY_RESPONSE_CONFIG = {
+    "link": "https://t.me/merchant_bot",
+    "private_reply": {"uz": "Mana havola 👉 {link}", "ru": "Вот ссылка 👉 {link}"},
+    "media_ids": [],
+}
+
+
+def _make_story_event(db, merchant_id, text: str, message_id: str = "m-1", created_at: dt.datetime | None = None):
+    event = CommentEvent(
+        merchant_id=merchant_id,
+        channel="instagram_story_reply",
+        external_id=message_id,
+        commenter_id="9001",
+        media_id="story-18001",
+        raw_text=text,
+        status="pending",
+    )
+    if created_at is not None:
+        event.created_at = created_at
+    db.add(event)
+    db.flush()
+    return event
+
+
+def _make_story_flow(db, merchant_id):
+    return make_flow(
+        db,
+        merchant_id,
+        "story_reply_link",
+        ["narx", "narxi", "цена"],
+        channel="instagram_story_reply",
+        response_config=STORY_RESPONSE_CONFIG,
     )
 
 
@@ -206,3 +248,56 @@ def test_media_scoped_flow_ignores_other_posts(routed_session, ig_merchant):
 
     assert status == "no_match"
     assert client.private_calls == []
+
+
+def test_story_reply_gets_dm_via_send_message_not_private_reply(routed_session, ig_merchant):
+    flow = _make_story_flow(routed_session, ig_merchant.id)
+    event = _make_story_event(routed_session, ig_merchant.id, "narxi qancha?")
+    client = StubClient()
+
+    status = process_comment_event(routed_session, get_redis(), event.id, client=client)
+
+    assert status == "replied"
+    assert client.message_calls == [("9001", "Mana havola 👉 https://t.me/merchant_bot")]
+    assert client.private_calls == []
+    assert client.public_calls == []
+    assert event.matched_flow_id == flow.id
+
+
+def test_story_reply_never_attempts_public_reply(routed_session, ig_merchant):
+    # Even if a story flow's config somehow carried a public_reply, the
+    # channel gate must still suppress it - there's no comment to post
+    # a public reply under.
+    _make_story_flow(routed_session, ig_merchant.id)
+    event = _make_story_event(routed_session, ig_merchant.id, "narx")
+    event.matched_flow_id = None  # not asserted here; just confirming no public call path
+    client = StubClient()
+
+    process_comment_event(routed_session, get_redis(), event.id, client=client)
+
+    assert client.public_calls == []
+
+
+def test_story_reply_uses_24h_window_not_7_day(routed_session, ig_merchant):
+    _make_story_flow(routed_session, ig_merchant.id)
+    thirty_hours_ago = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - dt.timedelta(hours=30)
+    event = _make_story_event(routed_session, ig_merchant.id, "narx", created_at=thirty_hours_ago)
+    client = StubClient()
+
+    status = process_comment_event(routed_session, get_redis(), event.id, client=client)
+
+    assert status == "dropped_stale"
+    assert client.message_calls == []
+
+
+def test_comment_channel_flow_does_not_match_story_reply_event(routed_session, ig_merchant):
+    # Channel-scoped matching (app/flows/executor.py) must keep the two
+    # event kinds from cross-triggering each other's flows.
+    _make_price_flow(routed_session, ig_merchant.id)  # channel="instagram_comment"
+    event = _make_story_event(routed_session, ig_merchant.id, "narx")
+    client = StubClient()
+
+    status = process_comment_event(routed_session, get_redis(), event.id, client=client)
+
+    assert status == "no_match"
+    assert client.message_calls == []

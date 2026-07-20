@@ -58,8 +58,12 @@ def receive_platform_update(
     telegram_user_id = message.from_.id
     text = message.text
 
-    if text == "/start":
-        service.handle_start(db, telegram_user_id, message.chat.id)
+    if text == "/start" or text.startswith("/start "):
+        # A deep link (t.me/<bot>?start=<payload>) arrives as "/start
+        # <payload>" - the payload is the merchant's webhook_slug from the
+        # website's "connect Telegram" button (see service.handle_start).
+        connect_token = text.removeprefix("/start").strip() or None
+        service.handle_start(db, telegram_user_id, message.chat.id, connect_token=connect_token)
         db.commit()
         return {"ok": True}
 

@@ -148,6 +148,12 @@ _ALREADY_REGISTERED = (
     "Siz allaqachon administrator sifatida ro'yxatdan o'tgansiz.\n"
     "Вы уже зарегистрированы как администратор."
 )
+# Both languages in one string, like _ALREADY_REGISTERED - these fire
+# before the language-pick step, so no language is known yet.
+_TELEGRAM_ALREADY_CONNECTED = (
+    "Bu akkauntga Telegram bot allaqachon ulangan.\n"
+    "К этому аккаунту Telegram-бот уже подключён."
+)
 _CHOOSE_LANGUAGE = "Tilni tanlang / Выберите язык:"
 _BOTFATHER_INSTRUCTIONS = {
     "uz": (
@@ -284,16 +290,33 @@ def _validate_token(token: str) -> dict | None:
         return None
 
 
-def handle_start(db: Session, telegram_user_id: int, chat_id: int) -> None:
+def handle_start(db: Session, telegram_user_id: int, chat_id: int, connect_token: str | None = None) -> None:
     existing_admin = db.scalar(select(MerchantAdmin).where(MerchantAdmin.telegram_user_id == telegram_user_id))
     if existing_admin is not None:
         _send(chat_id, _ALREADY_REGISTERED)
         return
 
+    # Deep-link connect: the website's "connect Telegram" button links to
+    # t.me/<bot>?start=<webhook_slug> - the same unguessable capability
+    # token the Instagram connect flow keys on (app/instagram/router.py's
+    # start_connect). Resolving it here binds this onboarding session to
+    # the web-created merchant row, so _handle_token_text attaches the bot
+    # to that row instead of creating a second, disconnected Merchant (the
+    # dashboard's "Telegram: connected" check reads telegram_bot_id off
+    # the web account's own row - see app/auth/router.py's _merchant_out).
+    # An unknown or absent payload falls through to plain Telegram-first
+    # onboarding unchanged.
+    merchant = None
+    if connect_token:
+        merchant = db.scalar(select(Merchant).where(Merchant.webhook_slug == connect_token))
+        if merchant is not None and merchant.telegram_bot_id is not None:
+            _send(chat_id, _TELEGRAM_ALREADY_CONNECTED)
+            return
+
     session = _get_or_create_session(db, telegram_user_id)
     session.state = STATE_START
     session.language = None
-    session.merchant_id = None
+    session.merchant_id = merchant.id if merchant is not None else None
     session.data = None
     db.add(session)
 
@@ -419,14 +442,41 @@ def _handle_token_text(
         _send(chat_id, _TOKEN_ALREADY_REGISTERED[language])
         return
 
-    merchant = Merchant(
-        name=bot_info.get("first_name") or bot_info.get("username") or "Unnamed merchant",
-        telegram_bot_token=token,
-        telegram_bot_id=bot_info["id"],
-        webhook_secret=secrets.token_urlsafe(32),
-    )
-    db.add(merchant)
-    db.flush()
+    merchant = db.get(Merchant, session.merchant_id) if session.merchant_id else None
+    if merchant is not None:
+        # Deep-link connect: the session was bound to a web-created
+        # merchant at /start (see handle_start) - attach the bot to that
+        # existing row rather than creating a new one. Guard against a
+        # concurrent connect through the same link having finished first.
+        if merchant.telegram_bot_id is not None:
+            _send(chat_id, _TELEGRAM_ALREADY_CONNECTED)
+            return
+        merchant.telegram_bot_token = token
+        merchant.telegram_bot_id = bot_info["id"]
+        # Website signup leaves name NULL (shop name was never asked
+        # there) - prefill from getMe only if empty, so the shop-name
+        # confirm prompt below has something to show without clobbering
+        # anything a merchant already set.
+        if not merchant.name:
+            merchant.name = bot_info.get("first_name") or bot_info.get("username") or "Unnamed merchant"
+        db.add(merchant)
+    else:
+        merchant = Merchant(
+            name=bot_info.get("first_name") or bot_info.get("username") or "Unnamed merchant",
+            telegram_bot_token=token,
+            telegram_bot_id=bot_info["id"],
+            webhook_secret=secrets.token_urlsafe(32),
+        )
+        db.add(merchant)
+        db.flush()
+
+    # Not a model column - just enough to prefill a t.me/<username> link in
+    # the automations install wizard (app/automations/router.py) without a
+    # live getMe() call at that point. Best-effort: some bots have no
+    # public username set yet.
+    if bot_info.get("username"):
+        merchant.profile = {**(merchant.profile or {}), "telegram_bot_username": bot_info["username"]}
+        db.add(merchant)
 
     db.add(MerchantAdmin(merchant_id=merchant.id, telegram_user_id=session.telegram_user_id))
 

@@ -15,6 +15,8 @@ failed by the service layer, and the loop itself never dies with it.
 import logging
 import uuid
 
+import redis
+
 from app.db.session import SessionLocal
 from app.instagram.queue import COMMENTS_QUEUE_KEY, pop_due_deferred
 from app.instagram.service import process_comment_event
@@ -47,7 +49,15 @@ def run() -> None:
         for event_id in pop_due_deferred(redis_client):
             _process(redis_client, event_id)
 
-        popped = redis_client.brpop([COMMENTS_QUEUE_KEY], timeout=_BRPOP_TIMEOUT_SECONDS)
+        try:
+            popped = redis_client.brpop([COMMENTS_QUEUE_KEY], timeout=_BRPOP_TIMEOUT_SECONDS)
+        except redis.exceptions.TimeoutError:
+            # redis-py's client-side socket read has ~zero headroom over
+            # BRPOP's own server-side block timeout, so an empty queue
+            # reliably races this exception instead of returning None -
+            # that's the expected "nothing to do this cycle" case, not a
+            # real failure.
+            popped = None
         if popped is not None:
             _, event_id = popped
             _process(redis_client, event_id)
