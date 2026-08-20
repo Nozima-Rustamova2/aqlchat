@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="uz" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Agentlar — Dukan AI</title>
+<meta name="theme-color" content="#0b0f14">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='12' fill='%231E4954'/%3E%3Ccircle cx='24' cy='24' r='7.5' fill='%23C9702E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* This page intentionally uses its own dark/teal palette, distinct from
+   * the rest of the site's light/dark-togglable --bg/--surface theme
+   * (see dashboard.html etc.) - approved per the Agentlar design handoff.
+   * Scoped entirely to CSS custom properties local to this file so it
+   * never leaks into / gets confused with the shared theme variables. */
+  :root {
+    color-scheme: dark;
+    --ag-bg: #0b0f14;
+    --ag-sidebar: #0e1319;
+    --ag-card: #12171e;
+    --ag-chip: #141a22;
+    --ag-chip-2: #1c232c;
+    --ag-border: #1c232c;
+    --ag-border-2: #1f2731;
+    --ag-border-3: #263039;
+    --ag-heading: #f5f7f9;
+    --ag-heading-2: #f2f4f7;
+    --ag-body: #e7ebef;
+    --ag-text-2: #9aa4b1;
+    --ag-text-3: #8b95a1;
+    --ag-text-4: #6b7480;
+    --ag-accent: #2dd4bf;
+    --ag-accent-end: #0d9488;
+    --ag-orange: #f5a623;
+    --ag-warn-bg: #2a2013;
+    --ag-warn-text: #c9862f;
+    --ag-ok-bg: #0f2b26;
+    --ag-danger: #e0645e;
+    --ag-danger-border: #6b2d2b;
+    --ag-overlay: #05070ab8;
+    /* Aliases so the shared i18n.js language-switcher pill (which falls
+     * back to var(--surface-alt,...) etc.) picks up this page's palette
+     * instead of its generic gray fallback. */
+    --surface-alt: var(--ag-chip-2);
+    --surface: var(--ag-card);
+    --text-4: var(--ag-text-4);
+    --primary-text: var(--ag-accent);
+  }
+  * { box-sizing: border-box; }
+  ::selection { background: #2dd4bf55; }
+  ::placeholder { color: #55606b; }
+  body {
+    margin: 0; min-height: 100vh; font-family: 'Inter', sans-serif;
+    color: var(--ag-body); background: var(--ag-bg);
+  }
+  a { text-decoration: none; color: inherit; }
+  button, textarea, input { font-family: 'Inter', sans-serif; }
+
+  .app-shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 260px; flex-shrink: 0; background: var(--ag-sidebar);
+    border-right: 1px solid var(--ag-border);
+    display: flex; flex-direction: column; padding: 20px 16px;
+  }
+  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 8px 8px 20px; }
+  .logo-mark { position: relative; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, var(--ag-accent), var(--ag-accent-end)); }
+  .logo-mark .dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--ag-orange); border: 2px solid var(--ag-sidebar); }
+  .wordmark { font-size: 19px; font-weight: 800; color: var(--ag-heading-2); letter-spacing: -0.3px; }
+  .sidebar-account {
+    display: flex; align-items: center; gap: 10px; background: var(--ag-chip);
+    border: 1px solid var(--ag-border-2); border-radius: 12px; padding: 10px 12px; margin-bottom: 18px;
+  }
+  .avatar-circle {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--ag-accent); color: #06231f;
+    font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+  }
+  .account-name { font-size: 14px; font-weight: 600; color: #dfe4e9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
+    cursor: pointer; color: var(--ag-text-2); font-size: 14.5px; font-weight: 600;
+  }
+  .nav-item svg { flex-shrink: 0; opacity: 0.85; }
+  .nav-item.active { color: var(--ag-accent); background: #141c22; }
+  .nav-item.disabled { cursor: default; }
+  .nav-item.sub { padding: 9px 12px 9px 34px; font-size: 14px; }
+  .soon-badge {
+    margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--ag-warn-text);
+    background: var(--ag-warn-bg); padding: 3px 8px; border-radius: 20px;
+  }
+  .lang-row { display: flex; gap: 6px; background: var(--ag-chip); border-radius: 10px; padding: 4px; margin-bottom: 12px; }
+  .sidebar-footer { margin-top: auto; }
+  .logout-link {
+    width: 100%; text-align: center; padding: 11px 0; border-radius: 10px; border: 1px solid var(--ag-border-2);
+    background: transparent; color: var(--ag-text-3); font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+
+  main { flex: 1; min-width: 0; padding: 48px 56px; }
+  h1 { font-size: 32px; font-weight: 800; color: var(--ag-heading); letter-spacing: -0.5px; margin: 0; }
+  .sub { font-size: 15px; color: var(--ag-text-3); margin: 8px 0 0; }
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+  .btn-accent {
+    font-size: 14px; font-weight: 700; color: #06231f; background: var(--ag-accent);
+    padding: 11px 20px; border: none; border-radius: 10px; cursor: pointer; white-space: nowrap;
+  }
+  #loading { text-align: center; padding: 80px 20px; color: var(--ag-text-4); font-size: 14.5px; }
+
+  /* empty state */
+  .empty-state {
+    margin-top: 60px; display: flex; flex-direction: column; align-items: center; text-align: center;
+    padding: 70px 20px; border: 1px dashed var(--ag-border-3); border-radius: 20px;
+  }
+  .empty-icon {
+    width: 64px; height: 64px; border-radius: 18px; background: var(--ag-chip); border: 1px solid var(--ag-border-2);
+    display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--ag-accent); margin-bottom: 22px;
+  }
+  .empty-title { font-size: 19px; font-weight: 700; color: var(--ag-body); }
+  .empty-help { font-size: 14px; color: var(--ag-text-4); margin-top: 8px; max-width: 360px; line-height: 1.5; }
+  .empty-state .btn-accent { margin-top: 26px; font-size: 14.5px; padding: 12px 26px; border-radius: 11px; }
+
+  /* list state */
+  #agent-list { margin-top: 32px; display: flex; flex-direction: column; gap: 14px; }
+  .agent-card {
+    background: var(--ag-card); border: 1px solid var(--ag-border-2); border-radius: 16px;
+    padding: 24px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+    transition: border-color .15s;
+  }
+  .agent-card:hover { border-color: var(--ag-border-3); }
+  .agent-card-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .agent-icon {
+    width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--ag-accent), var(--ag-accent-end));
+    display: flex; align-items: center; justify-content: center; font-size: 20px; color: #06231f;
+  }
+  .agent-name { font-size: 16.5px; font-weight: 700; color: var(--ag-heading-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-meta { font-size: 13px; color: var(--ag-text-4); margin-top: 4px; }
+  .agent-card-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .status-pill { font-size: 12.5px; font-weight: 700; padding: 5px 12px; border-radius: 20px; white-space: nowrap; }
+  .status-pill.on { color: var(--ag-accent); background: var(--ag-ok-bg); }
+  .status-pill.off { color: var(--ag-warn-text); background: var(--ag-warn-bg); }
+  .btn-ghost-danger {
+    font-size: 13px; font-weight: 600; color: var(--ag-text-2); background: transparent;
+    border: 1px solid var(--ag-border-3); padding: 8px 16px; border-radius: 9px; cursor: pointer;
+  }
+  .btn-ghost-danger:hover { color: var(--ag-danger); border-color: var(--ag-danger-border); }
+
+  /* modal / wizard */
+  .overlay {
+    display: none; position: fixed; inset: 0; background: var(--ag-overlay); backdrop-filter: blur(4px);
+    align-items: center; justify-content: center; z-index: 50; padding: 20px;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    width: 640px; max-width: 100%; max-height: 90vh; overflow-y: auto;
+    background: var(--ag-card); border: 1px solid var(--ag-border-3); border-radius: 22px;
+  }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 26px 30px 0; }
+  .modal-title { font-size: 20px; font-weight: 800; color: var(--ag-heading); }
+  .modal-close { font-size: 16px; color: var(--ag-text-4); cursor: pointer; padding: 4px 8px; background: none; border: none; }
+  .progress-row { display: flex; gap: 8px; padding: 22px 30px 26px; }
+  .progress-seg { flex: 1; height: 4px; border-radius: 4px; background: var(--ag-border-2); }
+  .progress-seg.filled { background: var(--ag-accent); }
+  .modal-body { padding: 0 30px 30px; min-height: 280px; }
+  .step-eyebrow { font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; color: var(--ag-accent); }
+  .step-title { font-size: 19px; font-weight: 700; color: var(--ag-heading-2); margin-top: 8px; }
+  .step-sub { font-size: 14px; color: var(--ag-text-3); margin-top: 6px; }
+  .field-error { color: var(--ag-danger); font-size: 13px; margin-top: 14px; min-height: 1em; }
+
+  .tone-options { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+  .tone-card {
+    display: flex; align-items: center; justify-content: space-between; padding: 16px 18px;
+    border-radius: 13px; border: 1.5px solid var(--ag-border-3); background: var(--ag-sidebar); cursor: pointer;
+  }
+  .tone-card.selected { border-color: var(--ag-accent); background: #12241f; }
+  .tone-card-title { font-size: 15px; font-weight: 700; color: var(--ag-heading-2); }
+  .tone-card-desc { font-size: 13px; color: var(--ag-text-3); margin-top: 3px; }
+  .tone-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ag-border-3); flex-shrink: 0; position: relative; }
+  .tone-card.selected .tone-radio { border-color: var(--ag-accent); }
+  .tone-card.selected .tone-radio::after {
+    content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--ag-accent);
+  }
+
+  .limit-row { margin-top: 26px; display: flex; align-items: center; gap: 16px; }
+  .limit-btn {
+    width: 44px; height: 44px; border-radius: 12px; background: var(--ag-chip-2); border: 1px solid var(--ag-border-3);
+    display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--ag-body); cursor: pointer;
+  }
+  .limit-btn:disabled { opacity: 0.4; cursor: default; }
+  .limit-value { flex: 1; text-align: center; font-size: 28px; font-weight: 800; color: var(--ag-heading); }
+  .limit-unit { font-size: 14px; font-weight: 600; color: var(--ag-text-4); margin-left: 6px; }
+
+  textarea.info-textarea {
+    width: 100%; box-sizing: border-box; margin-top: 20px; height: 150px; background: var(--ag-sidebar);
+    border: 1px solid var(--ag-border-3); border-radius: 13px; padding: 14px 16px; color: var(--ag-body);
+    font-size: 14px; font-family: inherit; resize: none; outline: none; line-height: 1.55;
+  }
+
+  .connect-box { margin-top: 22px; background: var(--ag-sidebar); border: 1px solid var(--ag-border-3); border-radius: 14px; padding: 20px; }
+  .connect-status-row { display: flex; align-items: center; justify-content: space-between; }
+  .connect-status-label { font-size: 13.5px; font-weight: 600; color: var(--ag-text-2); }
+  .token-label { font-size: 13px; font-weight: 600; color: var(--ag-text-2); margin-top: 18px; }
+  input.token-input {
+    width: 100%; box-sizing: border-box; margin-top: 8px; background: var(--ag-chip); border: 1px solid var(--ag-border-3);
+    border-radius: 11px; padding: 12px 14px; color: var(--ag-body); font-size: 14px; font-family: inherit; outline: none;
+  }
+  .token-help { font-size: 12.5px; color: var(--ag-text-4); margin-top: 10px; line-height: 1.5; }
+  .btn-connect {
+    margin-top: 16px; display: inline-block; font-size: 13.5px; font-weight: 700; color: #06231f;
+    background: var(--ag-accent); padding: 10px 22px; border-radius: 9px; cursor: pointer; border: none;
+  }
+  .btn-connect:disabled { opacity: 0.6; cursor: default; }
+
+  .modal-footer { display: flex; align-items: center; justify-content: space-between; padding: 20px 30px; border-top: 1px solid var(--ag-border-2); }
+  .footer-back { font-size: 14px; font-weight: 600; color: var(--ag-text-2); cursor: pointer; background: none; border: none; }
+  .footer-next {
+    font-size: 14.5px; font-weight: 700; color: #06231f; background: var(--ag-accent);
+    padding: 11px 26px; border-radius: 10px; cursor: pointer; border: none;
+  }
+  .footer-next:disabled { opacity: 0.6; cursor: default; }
+
+  /* toast */
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--ag-card); border: 1px solid var(--ag-border-3); color: var(--ag-body);
+    font-size: 14px; font-weight: 600; padding: 13px 22px; border-radius: 12px; z-index: 60;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><div class="dot"></div></div>
+      <div class="wordmark">Dukan AI</div>
+    </div>
+    <div class="sidebar-account">
+      <div class="avatar-circle" id="avatar-initial">?</div>
+      <div class="account-name" id="sidebar-account-name">...</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7M5 10v10h14V10"/></svg>
+        <span data-i18n="nav.home">Bosh sahifa</span>
+      </a>
+      <span class="nav-item disabled">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-8.9 8.49 8.6 8.6 0 0 1-3.36-.69L3 21l1.7-5.74A8.5 8.5 0 1 1 21 11.5Z"/></svg>
+        <span data-i18n="nav.inbox" style="flex:1">Suhbatlar</span>
+        <span class="soon-badge" data-i18n="nav.soon">tez kunda</span>
+      </span>
+      <a href="/dashboard/automations" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>
+        <span data-i18n="nav.automation">Avtomatlashtirish</span>
+      </a>
+      <a href="/dashboard/agents" class="nav-item sub active">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 22 12 12 22 2 12Z"/></svg>
+        <span data-i18n="nav.agents">Agentlar</span>
+      </a>
+      <a href="/dashboard/settings" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        <span data-i18n="nav.settings">Sozlamalar</span>
+      </a>
+    </nav>
+    <div class="lang-row" id="lang-switch"></div>
+    <div class="sidebar-footer">
+      <button class="logout-link" id="logout" data-i18n="sidebar.logout">Chiqish</button>
+    </div>
+  </aside>
+
+  <main>
+    <div id="loading" data-i18n="common.loading">Yuklanmoqda...</div>
+
+    <div id="content" style="display:none">
+      <div class="page-head">
+        <div>
+          <h1 data-i18n="agents.title">Agentlar</h1>
+          <p class="sub" id="page-sub" data-i18n="agents.subEmpty">Mijozlaringiz bilan avtomatik suhbatlashadigan AI agent yarating.</p>
+        </div>
+        <button class="btn-accent" id="create-btn-header" style="display:none" data-i18n="agents.create">+ Agent yaratish</button>
+      </div>
+
+      <div class="empty-state" id="empty-state" style="display:none">
+        <div class="empty-icon">&#9671;</div>
+        <div class="empty-title" data-i18n="agents.emptyTitle">Hali agentlar yo'q</div>
+        <div class="empty-help" data-i18n="agents.emptyHelp">Birinchi AI agentingizni yarating va u mijozlaringiz savollariga avtomatik javob bersin.</div>
+        <button class="btn-accent" id="create-btn-empty" data-i18n="agents.create">+ Agent yaratish</button>
+      </div>
+
+      <div id="agent-list" style="display:none"></div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" data-i18n="agents.formTitle">Yangi agent yaratish</div>
+      <button type="button" class="modal-close" id="wizard-close" data-i18n-aria="agents.closeAria">&#10005;</button>
+    </div>
+
+    <div class="progress-row">
+      <div class="progress-seg" id="seg-0"></div>
+      <div class="progress-seg" id="seg-1"></div>
+      <div class="progress-seg" id="seg-2"></div>
+      <div class="progress-seg" id="seg-3"></div>
+    </div>
+
+    <div class="modal-body">
+
+      <div id="step-0">
+        <div class="step-eyebrow" data-i18n="agents.sectionTone">1-QADAM · OHANG</div>
+        <div class="step-title" data-i18n="agents.toneSectionTitle">Agent qanday ohangda gaplashsin?</div>
+        <div class="step-sub" data-i18n="agents.toneSectionSub">Mijozlar bilan muloqot uslubini tanlang.</div>
+        <div class="tone-options">
+          <div class="tone-card" id="tone-polite" data-tone="polite">
+            <div>
+              <div class="tone-card-title" data-i18n="agents.tonePoliteTitle">Muloyim</div>
+              <div class="tone-card-desc" data-i18n="agents.tonePoliteDesc">Iliq, samimiy va do'stona uslubda javob beradi.</div>
+            </div>
+            <div class="tone-radio"></div>
+          </div>
+          <div class="tone-card" id="tone-formal" data-tone="formal">
+            <div>
+              <div class="tone-card-title" data-i18n="agents.toneFormalTitle">Rasmiy</div>
+              <div class="tone-card-desc" data-i18n="agents.toneFormalDesc">Aniq, qisqa va professional uslubda javob beradi.</div>
+            </div>
+            <div class="tone-radio"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="step-1" style="display:none">
+        <div class="step-eyebrow" data-i18n="agents.sectionLimit">2-QADAM · LIMIT</div>
+        <div class="step-title" data-i18n="agents.limitSectionTitle">Bir foydalanuvchi uchun xabar limiti</div>
+        <div class="step-sub" data-i18n="agents.limitSectionSub">Har bir mijoz kuniga necha xabar yozishi mumkin.</div>
+        <div class="limit-row">
+          <button type="button" class="limit-btn" id="limit-dec">&minus;</button>
+          <div class="limit-value"><span id="limit-value">20</span><span class="limit-unit" data-i18n="agents.limitUnit">ta / kuniga</span></div>
+          <button type="button" class="limit-btn" id="limit-inc">+</button>
+        </div>
+      </div>
+
+      <div id="step-2" style="display:none">
+        <div class="step-eyebrow" data-i18n="agents.sectionInfo">3-QADAM · MA'LUMOTLAR</div>
+        <div class="step-title" data-i18n="agents.infoSectionTitle">Agent qaysi ma'lumotlar asosida javob bersin?</div>
+        <div class="step-sub" data-i18n="agents.infoSectionSub">Mahsulotlar, narxlar, yetkazib berish shartlari va tez-tez so'raladigan savollarni kiriting.</div>
+        <textarea class="info-textarea" id="info-textarea" data-i18n-placeholder="agents.infoPlaceholder" placeholder="Masalan: Bizning do'kon 9:00-21:00 ishlaydi. Yetkazib berish Toshkent bo'ylab 1 kun ichida, narxi 20 000 so'm. Mahsulotlar: ..."></textarea>
+        <div class="field-error" id="step2-error"></div>
+      </div>
+
+      <div id="step-3" style="display:none">
+        <div class="step-eyebrow" data-i18n="agents.sectionConnect">4-QADAM · ULANISH</div>
+        <div class="step-title" data-i18n="agents.connectSectionTitle">Telegram botga ulash</div>
+        <div class="step-sub" data-i18n="agents.connectSectionSub">Agent Telegram orqali mijozlarga javob bersin.</div>
+
+        <div class="connect-box">
+          <div class="connect-status-row">
+            <div class="connect-status-label" data-i18n="agents.connectionStatus">Ulanish holati</div>
+            <span class="status-pill" id="telegram-status-pill"></span>
+          </div>
+          <div class="token-label" data-i18n="agents.tokenLabel">Bot tokeni</div>
+          <input type="text" class="token-input" id="token-input" data-i18n-placeholder="agents.tokenPlaceholder" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+          <div class="token-help" data-i18n="agents.tokenHelp">Token olish uchun Telegramdagi @BotFather orqali bot yarating va tokenni shu yerga joylashtiring.</div>
+          <button type="button" class="btn-connect" id="telegram-connect-btn"></button>
+          <div class="field-error" id="step3-error"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="footer-back" id="wizard-back"></button>
+      <button type="button" class="footer-next" id="wizard-next"></button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" data-i18n="agents.toastCreated">Yangi agent yaratildi</div>
+
+<script src="/static/i18n.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  let merchant = null;
+  let agents = [];
+
+  const draft = {
+    step: 0,
+    tone: 'polite',
+    limit: 20,
+    knowledge: '',
+    token: '',
+    connected: false,
+    agentId: null,
+  };
+
+  async function api(path, options) {
+    const res = await fetch(path, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...options });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const err = new Error(body.detail || Dukan18n.t('common.error'));
+      err.status = res.status;
+      throw err;
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  function toneLabel(tone) {
+    return tone === 'formal' ? Dukan18n.t('agents.toneRasmiy') : Dukan18n.t('agents.toneMuloyim');
+  }
+
+  function showToast(text) {
+    const toast = $('toast');
+    toast.textContent = text;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  // ---------- list / empty state ----------
+
+  function renderAgents() {
+    const empty = $('empty-state');
+    const list = $('agent-list');
+    const headerBtn = $('create-btn-header');
+    const sub = $('page-sub');
+
+    if (agents.length === 0) {
+      empty.style.display = 'flex';
+      list.style.display = 'none';
+      headerBtn.style.display = 'none';
+      sub.textContent = Dukan18n.t('agents.subEmpty');
+      return;
+    }
+
+    empty.style.display = 'none';
+    list.style.display = 'flex';
+    headerBtn.style.display = 'inline-block';
+    sub.textContent = Dukan18n.t('agents.subList');
+
+    list.innerHTML = '';
+    for (const agent of agents) {
+      const active = !!agent.telegram_connected;
+      const card = document.createElement('div');
+      card.className = 'agent-card';
+      card.innerHTML = `
+        <div class="agent-card-main">
+          <div class="agent-icon">&#9671;</div>
+          <div style="min-width:0">
+            <div class="agent-name">${escapeHtml(agent.name)}</div>
+            <div class="agent-meta">${Dukan18n.t('agents.metaLine', { tone: toneLabel(agent.tone), limit: Dukan18n.t('agents.limitPerDay', { n: agent.daily_limit }) })}</div>
+          </div>
+        </div>
+        <div class="agent-card-actions">
+          <span class="status-pill ${active ? 'on' : 'off'}">${active ? Dukan18n.t('agents.statusActive') : Dukan18n.t('agents.statusConfiguring')}</span>
+          <button type="button" class="btn-ghost-danger" data-id="${agent.id}" data-action="delete">${Dukan18n.t('agents.delete')}</button>
+        </div>`;
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('[data-action="delete"]')) return;
+        window.location.href = '/dashboard/agents/' + agent.id;
+      });
+      card.querySelector('[data-action="delete"]').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(Dukan18n.t('agents.confirmDelete'))) return;
+        await api('/agents/' + agent.id, { method: 'DELETE' });
+        await loadAgents();
+      });
+      list.appendChild(card);
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  async function loadAgents() {
+    agents = await api('/agents');
+    renderAgents();
+  }
+
+  // ---------- wizard ----------
+
+  function defaultAgentName() {
+    const base = Dukan18n.t('agents.defaultName');
+    return agents.length === 0 ? base : base + ' ' + (agents.length + 1);
+  }
+
+  function resetDraft() {
+    draft.step = 0;
+    draft.tone = 'polite';
+    draft.limit = 20;
+    draft.knowledge = '';
+    draft.token = '';
+    draft.connected = false;
+    draft.agentId = null;
+    $('info-textarea').value = '';
+    $('token-input').value = '';
+    $('step2-error').textContent = '';
+    $('step3-error').textContent = '';
+  }
+
+  function openWizard() {
+    resetDraft();
+    renderWizard();
+    $('overlay').classList.add('open');
+  }
+
+  function closeWizard() {
+    $('overlay').classList.remove('open');
+  }
+
+  function renderWizard() {
+    for (let i = 0; i < 4; i++) {
+      $('step-' + i).style.display = i === draft.step ? 'block' : 'none';
+      $('seg-' + i).classList.toggle('filled', draft.step >= i);
+    }
+
+    $('tone-polite').classList.toggle('selected', draft.tone === 'polite');
+    $('tone-formal').classList.toggle('selected', draft.tone === 'formal');
+
+    $('limit-value').textContent = draft.limit;
+    $('limit-dec').disabled = draft.limit <= 1;
+    $('limit-inc').disabled = draft.limit >= 200;
+
+    const pill = $('telegram-status-pill');
+    pill.textContent = draft.connected ? Dukan18n.t('agents.statusLinked') : Dukan18n.t('agents.statusNotLinked');
+    pill.className = 'status-pill ' + (draft.connected ? 'on' : 'off');
+    const connectBtn = $('telegram-connect-btn');
+    connectBtn.textContent = draft.connected ? Dukan18n.t('agents.connectedButton') : Dukan18n.t('agents.connectButton');
+    connectBtn.disabled = draft.connected;
+
+    $('wizard-back').textContent = draft.step === 0 ? Dukan18n.t('agents.cancel') : Dukan18n.t('agents.back');
+    $('wizard-next').textContent = draft.step === 3 ? Dukan18n.t('agents.finishLabel') : Dukan18n.t('agents.continueLabel');
+  }
+
+  $('tone-polite').addEventListener('click', () => { draft.tone = 'polite'; renderWizard(); });
+  $('tone-formal').addEventListener('click', () => { draft.tone = 'formal'; renderWizard(); });
+
+  $('limit-dec').addEventListener('click', () => { draft.limit = Math.max(1, draft.limit - 5); renderWizard(); });
+  $('limit-inc').addEventListener('click', () => { draft.limit = Math.min(200, draft.limit + 5); renderWizard(); });
+
+  $('info-textarea').addEventListener('input', (e) => { draft.knowledge = e.target.value; });
+  $('token-input').addEventListener('input', (e) => { draft.token = e.target.value; });
+
+  $('wizard-close').addEventListener('click', closeWizard);
+  $('create-btn-empty').addEventListener('click', openWizard);
+  $('create-btn-header').addEventListener('click', openWizard);
+
+  $('wizard-back').addEventListener('click', () => {
+    if (draft.step === 0) { closeWizard(); return; }
+    draft.step -= 1;
+    renderWizard();
+  });
+
+  $('wizard-next').addEventListener('click', async () => {
+    if (draft.step === 0 || draft.step === 1) {
+      draft.step += 1;
+      renderWizard();
+      return;
+    }
+
+    if (draft.step === 2) {
+      // Steps 1-3 (tone/limit/knowledge) are pure local draft state - the
+      // agent only becomes real once we hand off to step 4, which needs
+      // a real id to call POST /agents/{id}/telegram/connect against.
+      $('step2-error').textContent = '';
+      $('wizard-next').disabled = true;
+      try {
+        if (draft.agentId) {
+          await api('/agents/' + draft.agentId, {
+            method: 'PATCH',
+            body: JSON.stringify({ tone: draft.tone, daily_limit: draft.limit, knowledge_text: draft.knowledge }),
+          });
+        } else {
+          const created = await api('/agents', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: defaultAgentName(),
+              tone: draft.tone,
+              daily_limit: draft.limit,
+              knowledge_text: draft.knowledge,
+            }),
+          });
+          draft.agentId = created.id;
+        }
+        draft.step = 3;
+        renderWizard();
+      } catch (err) {
+        $('step2-error').textContent = Dukan18n.t('agents.createError');
+      } finally {
+        $('wizard-next').disabled = false;
+      }
+      return;
+    }
+
+    // step === 3: finish
+    closeWizard();
+    await loadAgents();
+    showToast(Dukan18n.t('agents.toastCreated'));
+  });
+
+  $('telegram-connect-btn').addEventListener('click', async () => {
+    if (draft.connected || !draft.token.trim() || !draft.agentId) return;
+    $('step3-error').textContent = '';
+    $('telegram-connect-btn').disabled = true;
+    try {
+      const updated = await api('/agents/' + draft.agentId + '/telegram/connect', {
+        method: 'POST',
+        body: JSON.stringify({ token: draft.token.trim() }),
+      });
+      draft.connected = !!(updated && updated.telegram_connected);
+      renderWizard();
+    } catch (err) {
+      $('step3-error').textContent = Dukan18n.t('agents.connectError');
+      $('telegram-connect-btn').disabled = false;
+    }
+  });
+
+  // ---------- bootstrap ----------
+
+  async function init() {
+    Dukan18n.initI18n('lang-switch');
+
+    const res = await fetch('/auth/me', { credentials: 'same-origin' });
+    if (!res.ok) {
+      window.location.href = '/signup';
+      return;
+    }
+    merchant = await res.json();
+    Dukan18n.syncLangFromMerchant(merchant.ui_language, (lang) => {
+      fetch('/auth/me', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ui_language: lang }),
+      });
+    });
+    $('sidebar-account-name').textContent = merchant.name || merchant.owner_name || merchant.email || Dukan18n.t('common.account');
+    $('avatar-initial').textContent = (merchant.owner_name || merchant.email || '?').charAt(0).toUpperCase();
+
+    renderWizard();
+
+    try {
+      await loadAgents();
+    } catch (err) {
+      // /agents not reachable (backend not merged yet, etc.) - fall back
+      // to the empty state rather than leaving the page stuck loading.
+      agents = [];
+      renderAgents();
+    }
+
+    $('loading').style.display = 'none';
+    $('content').style.display = 'block';
+  }
+
+  $('logout').addEventListener('click', async () => {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    window.location.href = '/signup';
+  });
+
+  init();
+</script>
+</body>
+</html>

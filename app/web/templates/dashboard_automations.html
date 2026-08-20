@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="uz">
+<html lang="uz" translate="no">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
 <title>Avtomatlashtirish — Dukan AI</title>
 <meta name="theme-color" content="#FCF6EE" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14181F" media="(prefers-color-scheme: dark)">
@@ -111,6 +112,7 @@
   .nav-item.active { background: var(--surface-alt); color: var(--primary-text); }
   .nav-item.active svg { opacity: 1; }
   .nav-item.disabled { color: var(--text-4); cursor: default; opacity: 0.6; }
+  .nav-item.sub { padding-left: 34px; font-size: 14px; }
   .soon-badge {
     margin-left: auto; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 999px;
     background: var(--accent-tint); color: var(--accent-text);
@@ -179,11 +181,12 @@
   .modal .modal-sub { font-size: 13.5px; color: var(--text-2); margin: 0 0 18px; }
   label { display: block; font-size: 13px; font-weight: 700; color: var(--text-2); margin: 0 0 6px; }
   .field { margin-bottom: 16px; }
-  input[type=text], input[type=url] {
+  input[type=text], input[type=url], textarea {
     width: 100%; font-family: 'Manrope', sans-serif; font-size: 14.5px;
     background: var(--input-bg); border: 1.5px solid var(--input-border);
     border-radius: 12px; padding: 11px 13px; color: var(--text); outline: none;
   }
+  textarea { resize: vertical; min-height: 90px; }
   .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .radio-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
   .radio-option { display: flex; align-items: center; gap: 8px; font-size: 14px; }
@@ -231,6 +234,10 @@
       <a href="/dashboard/automations" class="nav-item active">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>
         <span data-i18n="nav.automation">Avtomatlashtirish</span>
+      </a>
+      <a href="/dashboard/agents" class="nav-item sub">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 22 12 12 22 2 12Z"/></svg>
+        <span data-i18n="nav.agents">Agentlar</span>
       </a>
       <a href="/dashboard/settings" class="nav-item">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
@@ -326,6 +333,10 @@
     return items.map((k) => `<span class="chip">${k}</span>`).join('');
   }
 
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
   function channelLabel(channel) {
     return channel === 'instagram_story_reply' ? Dukan18n.t('auto.channelStory') : Dukan18n.t('auto.channelComment');
   }
@@ -409,11 +420,17 @@
     for (const field of tpl.fields) {
       const wrap = document.createElement('div');
       wrap.className = 'field';
-      const prefillLink = field.key === 'link' && !existing && merchant.telegram_bot_username
-        ? `https://t.me/${merchant.telegram_bot_username}`
-        : '';
-      const value = existing ? (field.key === 'link' ? existing.link : '') : prefillLink;
-      wrap.innerHTML = `<label>${field.label}</label><input type="text" data-field="${field.key}" value="${value || ''}">`;
+      let value = '';
+      if (existing) {
+        if (field.key === 'link') value = existing.link || '';
+        else if (field.key === 'keyword') value = (existing.keywords && existing.keywords[0]) || '';
+        else if (field.key === 'message') value = existing.message || '';
+      } else if (field.key === 'link' && merchant.telegram_bot_username) {
+        value = `https://t.me/${merchant.telegram_bot_username}`;
+      }
+      wrap.innerHTML = field.type === 'textarea'
+        ? `<label>${field.label}</label><textarea data-field="${field.key}" rows="4">${escapeHtml(value)}</textarea>`
+        : `<label>${field.label}</label><input type="text" data-field="${field.key}" value="${escapeHtml(value)}">`;
       fieldsHost.appendChild(wrap);
     }
 

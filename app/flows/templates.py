@@ -12,20 +12,29 @@ app/flows/schema.py's InstagramCommentResponse.link is a required field on
 every instagram_comment response shape - even "giveaway_keyword", where the
 link is closer to "terms/channel" than "buy here".
 
-"giveaway_keyword" is the one preset with an extra "keyword" field - the
-single deliberate exception to "keywords are fixed by the preset, only
-fields are merchant-editable" (see MVP plan section A), since a giveaway's
-entry phrase is inherently merchant-chosen, not something a generic
-preset can guess.
+Some presets (e.g. "giveaway_keyword", "story_reply_link", "keyword_to_dm")
+have an extra "keyword" field - the deliberate exception to "keywords are
+fixed by the preset, only fields are merchant-editable" (see MVP plan
+section A), since these triggers are inherently merchant-chosen, not
+something a generic preset can guess. "keyword_to_dm" goes one step
+further with a "message" field: a free-text private_reply the merchant
+writes themselves, still routed through the same {link} substitution as
+every other preset (app/instagram/service.py) - the one deliberate
+exception to "reply copy always comes from the preset" (see
+app/automations/router.py's docstring for the reasoning behind that
+default).
 """
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class TemplateField(TypedDict):
     key: str
     required: bool
     label: dict[str, str]
+    # "text" (default, single-line) | "textarea" (multi-line, for
+    # merchant-authored free text like keyword_to_dm's "message" field).
+    type: NotRequired[str]
 
 
 class Template(TypedDict):
@@ -52,36 +61,32 @@ _LINK_FIELD: TemplateField = {
 }
 
 TEMPLATES: dict[str, Template] = {
-    "price_to_dm": {
-        "name": {"uz": "Narx so'raganlarga DM", "ru": "DM спросившим цену"},
+    "keyword_to_dm": {
+        "name": {"uz": "Kalit so'z yozganga xabar yuborish", "ru": "Сообщение написавшим ключевое слово"},
         "description": {
-            "uz": "Mijoz izohda “narx” deb yozsa, unga narxlar havolasi DM orqali yuboriladi.",
-            "ru": "Когда клиент пишет «цена» в комментарии, ему в личку придёт ссылка с ценами.",
+            "uz": (
+                "O'zingiz tanlagan kalit so'z bilan izoh qoldirganlarga o'zingiz yozgan "
+                "xabar DM orqali yuboriladi."
+            ),
+            "ru": "Тем, кто оставит комментарий с вашим ключевым словом, в личку придёт сообщение, которое вы сами напишете.",
         },
         "channel": "instagram_comment",
-        "keywords": ["narx", "narxi", "narxi qancha", "qancha", "цена", "сколько"],
-        "private_reply": {
-            "uz": "Assalomu alaykum! Narxlar va buyurtma: {link} \U0001f60a",
-            "ru": "Здравствуйте! Цены и заказ: {link} \U0001f60a",
-        },
+        "keywords": [],  # merchant-supplied via the "keyword" field
+        # Unused - overridden per-install from the "message" field
+        # (app/automations/router.py's _build_response_config). Kept as a
+        # dict[str, str] only to satisfy the Template shape.
+        "private_reply": {"uz": "", "ru": ""},
         "public_reply": {"uz": "DM'ga yubordik! \U0001f4e9", "ru": "Отправили в DM! \U0001f4e9"},
-        "fields": [_LINK_FIELD],
-        "verticals": None,
-    },
-    "link_in_comments": {
-        "name": {"uz": "Havola so'raganlarga DM", "ru": "DM спросившим ссылку"},
-        "description": {
-            "uz": "Mijoz “link” yoki “havola” deb yozsa, unga kerakli havola DM orqali yuboriladi.",
-            "ru": "Когда клиент пишет «ссылка» в комментарии, ему в личку придёт нужная ссылка.",
-        },
-        "channel": "instagram_comment",
-        "keywords": ["link", "havola", "ссылка", "линк"],
-        "private_reply": {
-            "uz": "Salom! Mana havola: {link} \U0001f60a",
-            "ru": "Привет! Вот ссылка: {link} \U0001f60a",
-        },
-        "public_reply": {"uz": "DM'ga yubordik! \U0001f4e9", "ru": "Отправили в DM! \U0001f4e9"},
-        "fields": [_LINK_FIELD],
+        "fields": [
+            {"key": "keyword", "required": True, "label": {"uz": "Kalit so'z", "ru": "Ключевое слово"}},
+            {
+                "key": "message",
+                "required": True,
+                "type": "textarea",
+                "label": {"uz": "Xabar matni", "ru": "Текст сообщения"},
+            },
+            _LINK_FIELD,
+        ],
         "verticals": None,
     },
     "giveaway_keyword": {

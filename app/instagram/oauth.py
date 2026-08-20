@@ -51,7 +51,23 @@ def build_authorize_url(state: str) -> str:
 
 
 def exchange_code(code: str) -> InstagramCredentials:
-    """Authorization code -> short-lived token -> long-lived token."""
+    """Authorization code -> short-lived token -> long-lived token -> the
+    account's webhook-routing id.
+
+    The short-lived token response's own "user_id" field is NOT the id
+    Meta stamps into entry[].id on every subsequent webhook delivery for
+    this account - it's an app-scoped id, a different numeric namespace
+    for the same account. (Confirmed against Meta's Instagram Platform
+    docs: graph.instagram.com/me's "id" field is documented as "the app
+    user's app-scoped ID", while its "user_id" field - "the Instagram
+    professional account ID" - is the one that matches entry.id on
+    webhooks. Real-world symptom this fixes: a merchant connected fine,
+    but every webhook for their account logged "unknown ig user id" and
+    was silently dropped, because the wrong-namespace id had been stored
+    as merchants.instagram_user_id.) So an explicit /me call, using the
+    fresh token, replaces trusting the token-exchange response's
+    same-named-but-different field.
+    """
     short_response = httpx.post(
         SHORT_LIVED_TOKEN_URL,
         data={
@@ -78,11 +94,26 @@ def exchange_code(code: str) -> InstagramCredentials:
     long_response.raise_for_status()
     long = long_response.json()
 
+    webhook_user_id = _fetch_webhook_user_id(long["access_token"])
+
     return InstagramCredentials(
-        user_id=int(short["user_id"]),
+        user_id=webhook_user_id,
         access_token=long["access_token"],
         expires_at=_expires_at(long["expires_in"]),
     )
+
+
+def _fetch_webhook_user_id(access_token: str) -> int:
+    """The id that will show up as entry[].id on this account's webhook
+    deliveries - see exchange_code's docstring for why this can't just be
+    read off the token-exchange response."""
+    response = httpx.get(
+        f"https://graph.instagram.com/{settings.instagram_graph_api_version}/me",
+        params={"fields": "user_id", "access_token": access_token},
+        timeout=15,
+    )
+    response.raise_for_status()
+    return int(response.json()["user_id"])
 
 
 def refresh_long_lived_token(access_token: str) -> tuple[str, dt.datetime]:

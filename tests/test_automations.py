@@ -7,6 +7,7 @@ tests/test_auth.py - reusing it here would just be indirection).
 """
 
 import datetime as dt
+import json
 import secrets
 import uuid
 
@@ -100,7 +101,7 @@ def test_templates_filtered_by_vertical(auth_client, routed_session, routed_merc
     assert response.status_code == 200
     keys = {t["key"] for t in response.json()}
     assert "course_enroll" not in keys
-    assert "price_to_dm" in keys
+    assert "giveaway_keyword" in keys
 
 
 def test_templates_include_course_only_for_course_vertical(auth_client, routed_session, routed_merchant):
@@ -119,17 +120,17 @@ def test_templates_include_course_only_for_course_vertical(auth_client, routed_s
 def test_install_creates_flow_with_expected_shape(auth_client, routed_session, routed_merchant):
     response = auth_client.post(
         "/automations",
-        json={"template_key": "price_to_dm", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
+        json={"template_key": "course_enroll", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["template_key"] == "price_to_dm"
+    assert body["template_key"] == "course_enroll"
     assert body["link"] == "https://t.me/shop"
     assert body["public_reply_enabled"] is True
     assert body["is_active"] is True
 
     flow = routed_session.query(Flow).filter_by(merchant_id=routed_merchant.id, channel="instagram_comment").one()
-    assert flow.template_key == "price_to_dm"
+    assert flow.template_key == "course_enroll"
     assert flow.response_config["link"] == "https://t.me/shop"
     assert "public_reply" in flow.response_config
 
@@ -137,7 +138,7 @@ def test_install_creates_flow_with_expected_shape(auth_client, routed_session, r
 def test_install_rejects_bad_link(auth_client, routed_session):
     response = auth_client.post(
         "/automations",
-        json={"template_key": "price_to_dm", "fields": {"link": "not-a-url"}, "media_ids": [], "public_reply_enabled": True},
+        json={"template_key": "course_enroll", "fields": {"link": "not-a-url"}, "media_ids": [], "public_reply_enabled": True},
     )
     assert response.status_code == 400
 
@@ -145,7 +146,7 @@ def test_install_rejects_bad_link(auth_client, routed_session):
 def test_install_public_reply_disabled_omits_it(auth_client, routed_session):
     response = auth_client.post(
         "/automations",
-        json={"template_key": "price_to_dm", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": False},
+        json={"template_key": "course_enroll", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": False},
     )
     assert response.status_code == 200
     assert response.json()["public_reply_enabled"] is False
@@ -190,18 +191,164 @@ def test_giveaway_custom_keyword_is_transliterated_to_latin(auth_client, routed_
     assert response.json()["keywords"] == ["Sovg‘a"]
 
 
+def test_patch_custom_keyword_is_transliterated_to_latin(auth_client, routed_session):
+    # PATCH's keyword-edit path must canonicalize the same way POST's
+    # install path does (_resolve_keywords) - otherwise editing an
+    # existing automation's keyword to Cyrillic-Uzbek text would silently
+    # stop matching, since inbound comments are normalized to Latin before
+    # match_flow compares them.
+    install = auth_client.post(
+        "/automations",
+        json={
+            "template_key": "giveaway_keyword",
+            "fields": {"link": "https://t.me/shop", "keyword": "old"},
+            "media_ids": [],
+            "public_reply_enabled": True,
+        },
+    )
+    automation_id = install.json()["id"]
+    response = auth_client.patch(f"/automations/{automation_id}", json={"fields": {"keyword": "Совға"}})
+    assert response.status_code == 200
+    assert response.json()["keywords"] == ["Sovg‘a"]
+
+
 def test_reinstall_same_template_updates_instead_of_duplicating(auth_client, routed_session, routed_merchant):
     auth_client.post(
         "/automations",
-        json={"template_key": "price_to_dm", "fields": {"link": "https://t.me/old"}, "media_ids": [], "public_reply_enabled": True},
+        json={"template_key": "course_enroll", "fields": {"link": "https://t.me/old"}, "media_ids": [], "public_reply_enabled": True},
     )
     auth_client.post(
         "/automations",
-        json={"template_key": "price_to_dm", "fields": {"link": "https://t.me/new"}, "media_ids": [], "public_reply_enabled": True},
+        json={"template_key": "course_enroll", "fields": {"link": "https://t.me/new"}, "media_ids": [], "public_reply_enabled": True},
     )
-    rows = routed_session.query(Flow).filter_by(merchant_id=routed_merchant.id, template_key="price_to_dm").all()
+    rows = routed_session.query(Flow).filter_by(merchant_id=routed_merchant.id, template_key="course_enroll").all()
     assert len(rows) == 1
     assert rows[0].response_config["link"] == "https://t.me/new"
+
+
+def test_reinstall_giveaway_updates_keyword_not_just_link(auth_client, routed_session, routed_merchant):
+    # Reinstalling with a different custom keyword must overwrite the old
+    # trigger_value, not just response_config fields - otherwise a merchant
+    # "editing" their giveaway keyword via reinstall would leave the old
+    # (now-wrong) keyword active alongside/instead of the new one.
+    auth_client.post(
+        "/automations",
+        json={
+            "template_key": "giveaway_keyword",
+            "fields": {"link": "https://t.me/shop", "keyword": "OLDWORD"},
+            "media_ids": [],
+            "public_reply_enabled": True,
+        },
+    )
+    response = auth_client.post(
+        "/automations",
+        json={
+            "template_key": "giveaway_keyword",
+            "fields": {"link": "https://t.me/shop", "keyword": "NEWWORD"},
+            "media_ids": [],
+            "public_reply_enabled": True,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["keywords"] == ["NEWWORD"]
+
+    rows = routed_session.query(Flow).filter_by(merchant_id=routed_merchant.id, template_key="giveaway_keyword").all()
+    assert len(rows) == 1
+    assert json.loads(rows[0].trigger_value) == ["NEWWORD"]
+
+
+def test_install_two_templates_with_overlapping_keywords_both_succeed(auth_client, routed_session, routed_merchant):
+    # The collision warning (dashboard_automations.html's collidingAutomation)
+    # is a client-side "activate anyway" confirm step only - the server must
+    # NOT itself block two different, same-channel automations from ending
+    # up with an overlapping trigger keyword.
+    first = auth_client.post(
+        "/automations",
+        json={
+            "template_key": "giveaway_keyword",
+            "fields": {"link": "https://t.me/giveaway", "keyword": "sovga"},
+            "media_ids": [],
+            "public_reply_enabled": True,
+        },
+    )
+    second = auth_client.post(
+        "/automations",
+        json={
+            "template_key": "keyword_to_dm",
+            "fields": {"link": "https://t.me/shop", "keyword": "sovga", "message": "Salom!"},
+            "media_ids": [],
+            "public_reply_enabled": True,
+        },
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    rows = routed_session.query(Flow).filter_by(merchant_id=routed_merchant.id, channel="instagram_comment").all()
+    assert len(rows) == 2
+    assert all(row.is_active for row in rows)
+    assert all(json.loads(row.trigger_value) == ["sovga"] for row in rows)
+
+
+def test_giveaway_custom_keyword_mixed_script_is_normalized(auth_client, routed_session):
+    # A keyword mixing a Latin word and a Cyrillic-Uzbek word in the same
+    # string (e.g. typed with an accidentally-left keyboard layout switch
+    # mid-word) must still end up in the router's canonical Latin form -
+    # only the Cyrillic run gets transliterated, the Latin run passes
+    # through untouched (app/nlp/transliteration.py's per-run behavior).
+    response = auth_client.post(
+        "/automations",
+        json={
+            "template_key": "giveaway_keyword",
+            "fields": {"link": "https://t.me/shop", "keyword": "VIP Совға"},
+            "media_ids": [],
+            "public_reply_enabled": True,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["keywords"] == ["VIP Sovg‘a"]
+
+
+def test_giveaway_custom_keyword_whitespace_only_is_400(auth_client, routed_session):
+    response = auth_client.post(
+        "/automations",
+        json={
+            "template_key": "giveaway_keyword",
+            "fields": {"link": "https://t.me/shop", "keyword": "   "},
+            "media_ids": [],
+            "public_reply_enabled": True,
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_story_reply_link_uses_story_channel_and_has_no_public_reply(auth_client, routed_session, routed_merchant):
+    response = auth_client.post(
+        "/automations",
+        json={
+            "template_key": "story_reply_link",
+            "fields": {"link": "https://t.me/shop", "keyword": "STORY2026"},
+            "media_ids": [],
+            "public_reply_enabled": True,  # merchant asks for it, but the channel has no such surface
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["channel"] == "instagram_story_reply"
+    assert body["keywords"] == ["STORY2026"]
+    # public_reply_enabled must stay False regardless of the request flag -
+    # _build_response_config only turns it on for channel == instagram_comment.
+    assert body["public_reply_enabled"] is False
+
+    flow = routed_session.query(Flow).filter_by(merchant_id=routed_merchant.id, channel="instagram_story_reply").one()
+    assert "public_reply" not in flow.response_config
+
+
+def test_story_reply_link_requires_custom_keyword(auth_client, routed_session):
+    response = auth_client.post(
+        "/automations",
+        json={"template_key": "story_reply_link", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
+    )
+    assert response.status_code == 400
 
 
 def test_install_rejects_template_not_available_for_vertical(auth_client, routed_session, routed_merchant):
@@ -222,7 +369,7 @@ def test_install_rejects_template_not_available_for_vertical(auth_client, routed
 def test_list_includes_7_day_stats(auth_client, routed_session, routed_merchant):
     install = auth_client.post(
         "/automations",
-        json={"template_key": "price_to_dm", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
+        json={"template_key": "course_enroll", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
     )
     flow_id = uuid.UUID(install.json()["id"])
 
@@ -273,7 +420,7 @@ def test_list_includes_7_day_stats(auth_client, routed_session, routed_merchant)
 def test_patch_toggles_active(auth_client, routed_session):
     install = auth_client.post(
         "/automations",
-        json={"template_key": "price_to_dm", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
+        json={"template_key": "course_enroll", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
     )
     automation_id = install.json()["id"]
 
@@ -285,7 +432,7 @@ def test_patch_toggles_active(auth_client, routed_session):
 def test_delete_removes_flow(auth_client, routed_session, routed_merchant):
     install = auth_client.post(
         "/automations",
-        json={"template_key": "price_to_dm", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
+        json={"template_key": "course_enroll", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
     )
     automation_id = install.json()["id"]
 
@@ -309,7 +456,7 @@ def test_patch_on_another_merchants_automation_is_404(client, routed_session, ro
     client.cookies.set("dukan_session", token)
     install = client.post(
         "/automations",
-        json={"template_key": "price_to_dm", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
+        json={"template_key": "course_enroll", "fields": {"link": "https://t.me/shop"}, "media_ids": [], "public_reply_enabled": True},
     )
     automation_id = install.json()["id"]
 

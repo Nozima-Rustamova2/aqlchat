@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+<style>
+  @font-face { font-family: 'Inter'; src: local('Inter'); }
+  body { margin: 0; background: #0b0f14; }
+  ::selection { background: #2dd4bf55; }
+  ::placeholder { color: #55606b; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></link>
+</helmet>
+
+<div style="display:flex; min-height:100vh; background:#0b0f14; font-family:'Inter',sans-serif; color:#e7ebef;">
+
+  <div style="width:260px; flex-shrink:0; background:#0e1319; border-right:1px solid #1c232c; display:flex; flex-direction:column; padding:20px 16px; box-sizing:border-box;">
+    <div style="display:flex; align-items:center; gap:10px; padding:8px 8px 20px 8px;">
+      <div style="width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#2dd4bf,#0d9488); position:relative; flex-shrink:0;">
+        <div style="position:absolute; right:-2px; bottom:-2px; width:12px; height:12px; border-radius:50%; background:#f5a623; border:2px solid #0e1319;"></div>
+      </div>
+      <div style="font-size:19px; font-weight:800; color:#f2f4f7; letter-spacing:-0.3px;">Dukan AI</div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:10px; background:#141a22; border:1px solid #1f2731; border-radius:12px; padding:10px 12px; margin-bottom:18px;">
+      <div style="width:30px; height:30px; border-radius:50%; background:#2dd4bf; color:#06231f; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">N</div>
+      <div style="font-size:14px; font-weight:600; color:#dfe4e9;">Nozima Rustamova</div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
+      <div onClick="{{ gotoHome }}" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; cursor:pointer; color:{{ navColorHome }}; background:{{ navBgHome }};">
+        <span style="font-size:16px;">⌂</span><span style="font-size:14.5px; font-weight:600;">Bosh sahifa</span>
+      </div>
+      <div onClick="{{ gotoChats }}" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; cursor:pointer; color:{{ navColorChats }}; background:{{ navBgChats }};">
+        <span style="font-size:16px;">💬</span><span style="font-size:14.5px; font-weight:600; flex:1;">Suhbatlar</span>
+        <span style="font-size:10.5px; font-weight:700; color:#c9862f; background:#2a2013; padding:3px 8px; border-radius:20px;">tez kunda</span>
+      </div>
+      <div onClick="{{ gotoAutomation }}" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; cursor:pointer; color:{{ navColorAutomation }}; background:{{ navBgAutomation }};">
+        <span style="font-size:16px;">⚡</span><span style="font-size:14.5px; font-weight:600;">Avtomatlashtirish</span>
+      </div>
+      <div onClick="{{ gotoAgents }}" style="display:flex; align-items:center; gap:12px; padding:9px 12px 9px 34px; border-radius:10px; cursor:pointer; color:{{ navColorAgents }}; background:{{ navBgAgents }};">
+        <span style="font-size:14px;">◇</span><span style="font-size:14px; font-weight:600;">Agentlar</span>
+      </div>
+      <div onClick="{{ gotoSettings }}" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; cursor:pointer; color:{{ navColorSettings }}; background:{{ navBgSettings }};">
+        <span style="font-size:16px;">⚙</span><span style="font-size:14.5px; font-weight:600;">Sozlamalar</span>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:6px; background:#141a22; border-radius:10px; padding:4px; margin-bottom:12px;">
+      <div style="flex:1; text-align:center; padding:7px 0; border-radius:7px; background:#1c2530; color:#2dd4bf; font-size:12.5px; font-weight:700; cursor:pointer;">UZ</div>
+      <div style="flex:1; text-align:center; padding:7px 0; border-radius:7px; color:#6b7480; font-size:12.5px; font-weight:700; cursor:pointer;">RU</div>
+      <div style="flex:1; text-align:center; padding:7px 0; border-radius:7px; color:#6b7480; font-size:12.5px; font-weight:700; cursor:pointer;">EN</div>
+    </div>
+    <div style="text-align:center; padding:11px 0; border-radius:10px; border:1px solid #1f2731; color:#8b95a1; font-size:14px; font-weight:600; cursor:pointer;">Chiqish</div>
+  </div>
+
+  <div style="flex:1; min-width:0; padding:48px 56px; box-sizing:border-box;">
+
+    <sc-if value="{{ isAutomation }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="font-size:32px; font-weight:800; color:#f5f7f9; letter-spacing:-0.5px;">Avtomatlashtirish</div>
+        <div style="font-size:15px; color:#8b95a1; margin-top:8px;">Instagram izohlariga avtomatik javob bering.</div>
+
+        <div style="font-size:12.5px; font-weight:700; letter-spacing:0.08em; color:#6b7480; margin-top:34px; margin-bottom:14px;">O'RNATILGAN</div>
+        <div style="background:#12171e; border:1px solid #1f2731; border-radius:16px; padding:22px 24px; display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:17px; font-weight:700; color:#f2f4f7;">Kalit so'z yozganga xabar yuborish</span>
+              <span style="font-size:12px; font-weight:600; color:#9aa4b1; background:#1c232c; padding:3px 10px; border-radius:8px;">Izoh</span>
+            </div>
+            <div style="margin-top:10px;"><span style="font-size:12.5px; font-weight:600; color:#9aa4b1; background:#1c232c; padding:4px 12px; border-radius:8px;">hello</span></div>
+            <div style="font-size:13.5px; color:#6b7480; margin-top:14px;">1 ta post • Shu hafta: 0 ta izoh → 0 ta DM</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="width:40px; height:22px; border-radius:20px; background:#2dd4bf; position:relative;"><div style="position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%; background:#0b0f14;"></div></div>
+            <div style="font-size:13.5px; font-weight:600; color:#e0645e; border:1px solid #6b2d2b; padding:7px 16px; border-radius:9px; cursor:pointer;">O'chirish</div>
+          </div>
+        </div>
+
+        <div style="font-size:12.5px; font-weight:700; letter-spacing:0.08em; color:#6b7480; margin-top:36px; margin-bottom:14px;">SHABLONLAR</div>
+        <div style="display:flex; gap:20px;">
+          <div style="flex:1; background:#12171e; border:1px solid #1f2731; border-radius:16px; padding:24px; display:flex; flex-direction:column;">
+            <div style="display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap;"><span style="font-size:16px; font-weight:700; color:#f2f4f7;">Kalit so'z yozganga xabar yuborish</span><span style="font-size:12px; font-weight:600; color:#9aa4b1; background:#1c232c; padding:3px 10px; border-radius:8px; white-space:nowrap;">Izoh</span></div>
+            <div style="font-size:13.5px; color:#8b95a1; margin-top:12px; line-height:1.5; flex:1;">O'zingiz tanlagan kalit so'z bilan izoh qoldirganlarga o'zingiz yozgan xabar DM orqali yuboriladi.</div>
+            <div style="margin-top:18px; align-self:flex-start; font-size:13.5px; font-weight:700; color:#06231f; background:#2dd4bf; padding:10px 20px; border-radius:9px; cursor:pointer;">Tahrirlash</div>
+          </div>
+          <div style="flex:1; background:#12171e; border:1px solid #1f2731; border-radius:16px; padding:24px; display:flex; flex-direction:column;">
+            <div style="display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap;"><span style="font-size:16px; font-weight:700; color:#f2f4f7;">Konkurs kalit so'zi</span><span style="font-size:12px; font-weight:600; color:#9aa4b1; background:#1c232c; padding:3px 10px; border-radius:8px; white-space:nowrap;">Izoh</span></div>
+            <div style="font-size:13.5px; color:#8b95a1; margin-top:12px; line-height:1.5; flex:1;">O'zingiz tanlagan kalit so'z bilan izoh qoldirganlarga ishtirok tasdiqlovchi DM yuboriladi.</div>
+            <div style="margin-top:18px; align-self:flex-start; font-size:13.5px; font-weight:700; color:#06231f; background:#2dd4bf; padding:10px 20px; border-radius:9px; cursor:pointer;">O'rnatish</div>
+          </div>
+          <div style="flex:1; background:#12171e; border:1px solid #1f2731; border-radius:16px; padding:24px; display:flex; flex-direction:column;">
+            <div style="display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap;"><span style="font-size:16px; font-weight:700; color:#f2f4f7;">Hikoya javobiga DM</span><span style="font-size:12px; font-weight:600; color:#9aa4b1; background:#1c232c; padding:3px 10px; border-radius:8px; white-space:nowrap;">Hikoya javobi</span></div>
+            <div style="font-size:13.5px; color:#8b95a1; margin-top:12px; line-height:1.5; flex:1;">Mijoz hikoyangizga o'zingiz tanlagan kalit so'z bilan javob yozsa, unga havola DM orqali yuboriladi.</div>
+            <div style="margin-top:18px; align-self:flex-start; font-size:13.5px; font-weight:700; color:#06231f; background:#2dd4bf; padding:10px 20px; border-radius:9px; cursor:pointer;">O'rnatish</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isAgents }}" hint-placeholder-val="{{ false }}">
+      <div>
+
+        <sc-if value="{{ showEmptyAgents }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="font-size:32px; font-weight:800; color:#f5f7f9; letter-spacing:-0.5px;">Agentlar</div>
+            <div style="font-size:15px; color:#8b95a1; margin-top:8px;">Mijozlaringiz bilan avtomatik suhbatlashadigan AI agent yarating.</div>
+
+            <div style="margin-top:60px; display:flex; flex-direction:column; align-items:center; text-align:center; padding:70px 20px; border:1px dashed #263039; border-radius:20px;">
+              <div style="width:64px; height:64px; border-radius:18px; background:#141a22; border:1px solid #1f2731; display:flex; align-items:center; justify-content:center; font-size:28px; color:#2dd4bf; margin-bottom:22px;">◇</div>
+              <div style="font-size:19px; font-weight:700; color:#e7ebef;">Hali agentlar yo'q</div>
+              <div style="font-size:14px; color:#6b7480; margin-top:8px; max-width:360px; line-height:1.5;">Birinchi AI agentingizni yarating va u mijozlaringiz savollariga avtomatik javob bersin.</div>
+              <div onClick="{{ startCreate }}" style="margin-top:26px; font-size:14.5px; font-weight:700; color:#06231f; background:#2dd4bf; padding:12px 26px; border-radius:11px; cursor:pointer;">+ Agent yaratish</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showAgentList }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="display:flex; align-items:flex-start; justify-content:space-between;">
+              <div>
+                <div style="font-size:32px; font-weight:800; color:#f5f7f9; letter-spacing:-0.5px;">Agentlar</div>
+                <div style="font-size:15px; color:#8b95a1; margin-top:8px;">Mijozlaringiz bilan avtomatik suhbatlashadigan AI agent.</div>
+              </div>
+              <div onClick="{{ startCreate }}" style="font-size:14px; font-weight:700; color:#06231f; background:#2dd4bf; padding:11px 20px; border-radius:10px; cursor:pointer; white-space:nowrap;">+ Agent yaratish</div>
+            </div>
+
+            <div style="margin-top:32px; background:#12171e; border:1px solid #1f2731; border-radius:16px; padding:24px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div style="display:flex; align-items:center; gap:14px;">
+                  <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#2dd4bf,#0d9488); display:flex; align-items:center; justify-content:center; font-size:20px;">◇</div>
+                  <div>
+                    <div style="font-size:16.5px; font-weight:700; color:#f2f4f7;">{{ agent.name }}</div>
+                    <div style="font-size:13px; color:#6b7480; margin-top:4px;">Ohang: {{ agent.toneLabel }} • Limit: {{ agent.limitLabel }}</div>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-size:12.5px; font-weight:700; color:{{ agent.statusColor }}; background:{{ agent.statusBg }}; padding:5px 12px; border-radius:20px;">{{ agent.statusLabel }}</span>
+                  <div onClick="{{ resetAgents }}" style="font-size:13px; font-weight:600; color:#9aa4b1; border:1px solid #263039; padding:8px 16px; border-radius:9px; cursor:pointer;">O'chirish</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isHome }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="font-size:32px; font-weight:800; color:#f5f7f9;">Bosh sahifa</div>
+        <div style="font-size:15px; color:#8b95a1; margin-top:10px;">Boshqaruv paneliga xush kelibsiz.</div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isChats }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="font-size:32px; font-weight:800; color:#f5f7f9;">Suhbatlar</div>
+        <div style="font-size:15px; color:#8b95a1; margin-top:10px;">Tez kunda ishga tushadi.</div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="font-size:32px; font-weight:800; color:#f5f7f9;">Sozlamalar</div>
+      </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ creating }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:#05070ab8; backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:50;">
+      <div style="width:640px; max-width:92vw; background:#12171e; border:1px solid #263039; border-radius:22px; padding:0; overflow:hidden;">
+
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:26px 30px 0 30px;">
+          <div style="font-size:20px; font-weight:800; color:#f5f7f9;">Yangi agent yaratish</div>
+          <div onClick="{{ cancelCreate }}" style="font-size:16px; color:#6b7480; cursor:pointer; padding:4px 8px;">✕</div>
+        </div>
+
+        <div style="display:flex; gap:8px; padding:22px 30px 26px 30px;">
+          <div style="flex:1; height:4px; border-radius:4px; background:{{ stepBar0 }};"></div>
+          <div style="flex:1; height:4px; border-radius:4px; background:{{ stepBar1 }};"></div>
+          <div style="flex:1; height:4px; border-radius:4px; background:{{ stepBar2 }};"></div>
+          <div style="flex:1; height:4px; border-radius:4px; background:{{ stepBar3 }};"></div>
+        </div>
+
+        <div style="padding:0 30px 30px 30px; min-height:280px;">
+
+          <sc-if value="{{ isStep0 }}" hint-placeholder-val="{{ true }}">
+            <div>
+              <div style="font-size:12.5px; font-weight:700; letter-spacing:0.08em; color:#2dd4bf;">1-QADAM · OHANG</div>
+              <div style="font-size:19px; font-weight:700; color:#f2f4f7; margin-top:8px;">Agent qanday ohangda gaplashsin?</div>
+              <div style="font-size:14px; color:#8b95a1; margin-top:6px;">Mijozlar bilan muloqot uslubini tanlang.</div>
+
+              <div style="display:flex; flex-direction:column; gap:12px; margin-top:24px;">
+                <div onClick="{{ setTonePolite }}" style="display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-radius:13px; border:1.5px solid {{ tonePoliteBorder }}; background:{{ tonePoliteBg }}; cursor:pointer;">
+                  <div>
+                    <div style="font-size:15px; font-weight:700; color:#f2f4f7;">Muloyim</div>
+                    <div style="font-size:13px; color:#8b95a1; margin-top:3px;">Iliq, samimiy va do'stona uslubda javob beradi.</div>
+                  </div>
+                  <div style="width:18px; height:18px; border-radius:50%; border:2px solid {{ tonePoliteBorder }}; background:{{ tonePoliteDot }};"></div>
+                </div>
+                <div onClick="{{ setToneFormal }}" style="display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-radius:13px; border:1.5px solid {{ toneFormalBorder }}; background:{{ toneFormalBg }}; cursor:pointer;">
+                  <div>
+                    <div style="font-size:15px; font-weight:700; color:#f2f4f7;">Rasmiy</div>
+                    <div style="font-size:13px; color:#8b95a1; margin-top:3px;">Aniq, qisqa va professional uslubda javob beradi.</div>
+                  </div>
+                  <div style="width:18px; height:18px; border-radius:50%; border:2px solid {{ toneFormalBorder }}; background:{{ toneFormalDot }};"></div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isStep1 }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-size:12.5px; font-weight:700; letter-spacing:0.08em; color:#2dd4bf;">2-QADAM · LIMIT</div>
+              <div style="font-size:19px; font-weight:700; color:#f2f4f7; margin-top:8px;">Bir foydalanuvchi uchun xabar limiti</div>
+              <div style="font-size:14px; color:#8b95a1; margin-top:6px;">Har bir mijoz kuniga necha xabar yozishi mumkin.</div>
+
+              <div style="margin-top:26px; display:flex; align-items:center; gap:16px;">
+                <div onClick="{{ decLimit }}" style="width:44px; height:44px; border-radius:12px; background:#1c232c; border:1px solid #263039; display:flex; align-items:center; justify-content:center; font-size:20px; color:#e7ebef; cursor:pointer;">−</div>
+                <div style="flex:1; text-align:center; font-size:28px; font-weight:800; color:#f5f7f9;">{{ form.limit }}<span style="font-size:14px; font-weight:600; color:#6b7480; margin-left:6px;">ta / kuniga</span></div>
+                <div onClick="{{ incLimit }}" style="width:44px; height:44px; border-radius:12px; background:#1c232c; border:1px solid #263039; display:flex; align-items:center; justify-content:center; font-size:20px; color:#e7ebef; cursor:pointer;">+</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isStep2 }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-size:12.5px; font-weight:700; letter-spacing:0.08em; color:#2dd4bf;">3-QADAM · MA'LUMOTLAR</div>
+              <div style="font-size:19px; font-weight:700; color:#f2f4f7; margin-top:8px;">Agent qaysi ma'lumotlar asosida javob bersin?</div>
+              <div style="font-size:14px; color:#8b95a1; margin-top:6px;">Mahsulotlar, narxlar, yetkazib berish shartlari va tez-tez so'raladigan savollarni kiriting.</div>
+
+              <textarea value="{{ form.info }}" onChange="{{ setInfo }}" placeholder="Masalan: Bizning do'kon 9:00-21:00 ishlaydi. Yetkazib berish Toshkent bo'ylab 1 kun ichida, narxi 20 000 so'm. Mahsulotlar: ..." style="width:100%; box-sizing:border-box; margin-top:20px; height:150px; background:#0e1319; border:1px solid #263039; border-radius:13px; padding:14px 16px; color:#e7ebef; font-size:14px; font-family:inherit; resize:none; outline:none; line-height:1.55;"></textarea>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isStep3 }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-size:12.5px; font-weight:700; letter-spacing:0.08em; color:#2dd4bf;">4-QADAM · ULANISH</div>
+              <div style="font-size:19px; font-weight:700; color:#f2f4f7; margin-top:8px;">Telegram botga ulash</div>
+              <div style="font-size:14px; color:#8b95a1; margin-top:6px;">Agent Telegram orqali mijozlarga javob bersin.</div>
+
+              <div style="margin-top:22px; background:#0e1319; border:1px solid #263039; border-radius:14px; padding:20px;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <div style="font-size:13.5px; font-weight:600; color:#9aa4b1;">Ulanish holati</div>
+                  <span style="font-size:12px; font-weight:700; color:{{ telegramStatusColor }}; background:{{ telegramStatusBg }}; padding:4px 12px; border-radius:20px;">{{ telegramStatusLabel }}</span>
+                </div>
+
+                <div style="font-size:13px; font-weight:600; color:#9aa4b1; margin-top:18px;">Bot tokeni</div>
+                <input value="{{ form.telegramToken }}" onChange="{{ setToken }}" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" style="width:100%; box-sizing:border-box; margin-top:8px; background:#141a22; border:1px solid #263039; border-radius:11px; padding:12px 14px; color:#e7ebef; font-size:14px; font-family:inherit; outline:none;"></input>
+
+                <div style="font-size:12.5px; color:#6b7480; margin-top:10px; line-height:1.5;">Token olish uchun Telegramdagi @BotFather orqali bot yarating va tokenni shu yerga joylashtiring.</div>
+
+                <div onClick="{{ connectTelegram }}" style="margin-top:16px; display:inline-block; font-size:13.5px; font-weight:700; color:#06231f; background:#2dd4bf; padding:10px 22px; border-radius:9px; cursor:pointer;">{{ telegramButtonLabel }}</div>
+              </div>
+            </div>
+          </sc-if>
+
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 30px; border-top:1px solid #1f2731;">
+          <div onClick="{{ back }}" style="font-size:14px; font-weight:600; color:#9aa4b1; cursor:pointer;">{{ backLabel }}</div>
+          <div onClick="{{ next }}" style="font-size:14.5px; font-weight:700; color:#06231f; background:#2dd4bf; padding:11px 26px; border-radius:10px; cursor:pointer;">{{ nextLabel }}</div>
+        </div>
+
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    page: 'automation',
+    creating: false,
+    step: 0,
+    agentCreated: false,
+    form: { tone: 'polite', limit: 20, info: '', telegramToken: '', telegramConnected: false }
+  };
+
+  gotoHome = () => this.setState({ page: 'home' });
+  gotoChats = () => this.setState({ page: 'chats' });
+  gotoAutomation = () => this.setState({ page: 'automation' });
+  gotoAgents = () => this.setState({ page: 'agents' });
+  gotoSettings = () => this.setState({ page: 'settings' });
+
+  startCreate = () => this.setState({ creating: true, step: 0 });
+  cancelCreate = () => this.setState({ creating: false });
+
+  setTonePolite = () => this.setState(s => ({ form: { ...s.form, tone: 'polite' } }));
+  setToneFormal = () => this.setState(s => ({ form: { ...s.form, tone: 'formal' } }));
+
+  incLimit = () => this.setState(s => ({ form: { ...s.form, limit: Math.min(200, s.form.limit + 5) } }));
+  decLimit = () => this.setState(s => ({ form: { ...s.form, limit: Math.max(1, s.form.limit - 5) } }));
+
+  setInfo = (e) => this.setState(s => ({ form: { ...s.form, info: e.target.value } }));
+  setToken = (e) => this.setState(s => ({ form: { ...s.form, telegramToken: e.target.value } }));
+
+  connectTelegram = () => {
+    if (!this.state.form.telegramToken.trim()) return;
+    this.setState(s => ({ form: { ...s.form, telegramConnected: true } }));
+  };
+
+  back = () => {
+    if (this.state.step === 0) { this.setState({ creating: false }); return; }
+    this.setState(s => ({ step: s.step - 1 }));
+  };
+
+  next = () => {
+    if (this.state.step === 3) {
+      this.setState({ creating: false, agentCreated: true, step: 0 });
+      return;
+    }
+    this.setState(s => ({ step: s.step + 1 }));
+  };
+
+  resetAgents = () => this.setState({ agentCreated: false });
+
+  renderVals() {
+    const { page, creating, step, form, agentCreated } = this.state;
+    const toneLabel = form.tone === 'polite' ? 'Muloyim' : 'Rasmiy';
+
+    return {
+      form,
+      gotoHome: this.gotoHome, gotoChats: this.gotoChats, gotoAutomation: this.gotoAutomation,
+      gotoAgents: this.gotoAgents, gotoSettings: this.gotoSettings,
+
+      isHome: page === 'home', isChats: page === 'chats', isAutomation: page === 'automation',
+      isAgents: page === 'agents', isSettings: page === 'settings',
+
+      navColorHome: page === 'home' ? '#2dd4bf' : '#9aa4b1',
+      navColorChats: page === 'chats' ? '#2dd4bf' : '#9aa4b1',
+      navColorAutomation: page === 'automation' ? '#2dd4bf' : '#9aa4b1',
+      navColorAgents: page === 'agents' ? '#2dd4bf' : '#9aa4b1',
+      navColorSettings: page === 'settings' ? '#2dd4bf' : '#9aa4b1',
+      navBgHome: page === 'home' ? '#141c22' : 'transparent',
+      navBgChats: page === 'chats' ? '#141c22' : 'transparent',
+      navBgAutomation: page === 'automation' ? '#141c22' : 'transparent',
+      navBgAgents: page === 'agents' ? '#141c22' : 'transparent',
+      navBgSettings: page === 'settings' ? '#141c22' : 'transparent',
+
+      creating,
+      startCreate: this.startCreate,
+      cancelCreate: this.cancelCreate,
+
+      isStep0: step === 0, isStep1: step === 1, isStep2: step === 2, isStep3: step === 3,
+      stepBar0: step >= 0 ? '#2dd4bf' : '#1f2731',
+      stepBar1: step >= 1 ? '#2dd4bf' : '#1f2731',
+      stepBar2: step >= 2 ? '#2dd4bf' : '#1f2731',
+      stepBar3: step >= 3 ? '#2dd4bf' : '#1f2731',
+
+      setTonePolite: this.setTonePolite, setToneFormal: this.setToneFormal,
+      tonePoliteBorder: form.tone === 'polite' ? '#2dd4bf' : '#263039',
+      tonePoliteBg: form.tone === 'polite' ? '#12241f' : '#0e1319',
+      tonePoliteDot: form.tone === 'polite' ? '#2dd4bf' : 'transparent',
+      toneFormalBorder: form.tone === 'formal' ? '#2dd4bf' : '#263039',
+      toneFormalBg: form.tone === 'formal' ? '#12241f' : '#0e1319',
+      toneFormalDot: form.tone === 'formal' ? '#2dd4bf' : 'transparent',
+
+      incLimit: this.incLimit, decLimit: this.decLimit,
+      setInfo: this.setInfo, setToken: this.setToken,
+      connectTelegram: this.connectTelegram,
+      telegramStatusLabel: form.telegramConnected ? 'Ulandi' : 'Ulanmagan',
+      telegramStatusColor: form.telegramConnected ? '#2dd4bf' : '#c9862f',
+      telegramStatusBg: form.telegramConnected ? '#0f2b26' : '#2a2013',
+      telegramButtonLabel: form.telegramConnected ? 'Ulandi ✓' : 'Ulash',
+
+      back: this.back, next: this.next,
+      backLabel: step === 0 ? 'Bekor qilish' : 'Orqaga',
+      nextLabel: step === 3 ? 'Yakunlash' : 'Davom etish',
+
+      resetAgents: this.resetAgents,
+      showEmptyAgents: !agentCreated,
+      showAgentList: agentCreated,
+      agent: {
+        name: 'Dukan AI Agent',
+        toneLabel,
+        limitLabel: form.limit + ' ta/kun',
+        statusLabel: form.telegramConnected ? 'Faol' : 'Sozlanmoqda',
+        statusColor: form.telegramConnected ? '#2dd4bf' : '#c9862f',
+        statusBg: form.telegramConnected ? '#0f2b26' : '#2a2013'
+      }
+    };
+  }
+}
+
+</script>
+</body>
+</html>

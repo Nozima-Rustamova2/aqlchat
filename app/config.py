@@ -55,5 +55,25 @@ class Settings(BaseSettings):
     # No safe default - a wrong value here silently misregisters webhooks.
     public_base_url: str = ""
 
+    # Supabase - a SEPARATE Postgres (pgvector) backend for the Agentlar
+    # feature's knowledge base (app/agents/knowledge.py), deliberately
+    # apart from database_url/app/db/session.py's engine - see the
+    # aqlchat-agents-knowledge-base-supabase memory. supabase_key is the
+    # service-role key (server-side writes via PostgREST, not the
+    # anon/public key). No safe default; a blank value surfaces as a
+    # failed httpx call, not a crash.
+    supabase_url: str = ""
+    supabase_key: str = ""
+
+    # Gemini embeddings for that same knowledge base - confirmed live
+    # 2026-07-20 against the configured gemini_api_key (models/gemini-embedding-001
+    # supports embedContent; output_dimensionality=768 confirmed to return
+    # 768-dim vectors). A SEPARATE embedding space from BGE-M3's
+    # EMBEDDING_DIM (app/db/models.py, app/nlp/embeddings.py), which is
+    # what Faq/Product retrieval use against the local Postgres - no
+    # dimension coincidence is intended between the two.
+    gemini_embedding_model: str = "gemini-embedding-001"
+    gemini_embedding_dimension: int = 768
+
 
 settings = Settings()

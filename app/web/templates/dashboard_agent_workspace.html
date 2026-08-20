@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="uz" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Agent — Dukan AI</title>
+<meta name="theme-color" content="#0b0f14">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='13' r='12' fill='%231E4954'/%3E%3Ccircle cx='24' cy='24' r='7.5' fill='%23C9702E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* This page intentionally uses its own dark teal palette (see
+     design_handoff_dukan_ai_agents/README.md "Design Tokens") rather than
+     the rest of the site's light/dark oklch theme (dashboard.html,
+     dashboard_automations.html, dashboard_settings.html) - a deliberate,
+     approved exception for the Agentlar feature. Structurally the sidebar
+     still matches those pages (same nav items/order/behavior); only the
+     visuals differ.
+
+     A handful of CSS variable *names* (--surface, --surface-alt, --text-4,
+     --primary-text) are reused on purpose - app/web/static/i18n.js injects
+     a language-switcher stylesheet that references those exact names with
+     fallbacks, so defining them here makes the shared switcher pick up
+     this page's palette for free. */
+  :root {
+    color-scheme: dark;
+    --bg: #0b0f14;
+    --sidebar: #0e1319;
+    --card: #12171e;
+    --surface: #12171e;
+    --surface-alt: #141a22;
+    --nav-active-bg: #141c22;
+    --border: #1c232c;
+    --border-2: #1f2731;
+    --border-3: #263039;
+    --text: #e7ebef;
+    --text-heading: #f5f7f9;
+    --text-heading-2: #f2f4f7;
+    --text-2: #9aa4b1;
+    --text-3: #8b95a1;
+    --text-4: #6b7480;
+    --teal: #2dd4bf;
+    --teal-dark: #0d9488;
+    --teal-deep: #06231f;
+    --primary-text: #2dd4bf;
+    --orange: #f5a623;
+    --warn-text: #c9862f;
+    --warn-bg: #2a2013;
+    --ok-bg: #0f2b26;
+    --danger-text: #e0645e;
+    --danger-border: #6b2d2b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; font-family: 'Inter', sans-serif;
+    color: var(--text); background: var(--bg);
+  }
+  a { text-decoration: none; color: inherit; }
+  button { font-family: 'Inter', sans-serif; }
+  ::placeholder { color: #55606b; }
+
+  /* ---------- app shell ---------- */
+  .app-shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 260px; flex-shrink: 0; background: var(--sidebar);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 20px 16px;
+  }
+  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 8px 8px 20px; }
+  .logo-mark { position: relative; width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; background: linear-gradient(135deg, var(--teal), var(--teal-dark)); }
+  .logo-mark .dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--orange); border: 2px solid var(--sidebar); }
+  .wordmark { font-weight: 800; font-size: 19px; letter-spacing: -0.3px; color: var(--text-heading-2); }
+  .sidebar-account {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 18px;
+    border: 1px solid var(--border-2); border-radius: 12px; background: var(--surface-alt);
+  }
+  .avatar-circle {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--teal); color: var(--teal-deep);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .account-name { font-size: 14px; font-weight: 600; color: #dfe4e9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
+    font-size: 14.5px; font-weight: 600; color: var(--text-2); cursor: pointer;
+  }
+  .nav-item svg { flex-shrink: 0; opacity: 0.75; }
+  .nav-item.active { background: var(--nav-active-bg); color: var(--teal); }
+  .nav-item.active svg { opacity: 1; }
+  .nav-item.sub { padding-left: 34px; font-size: 14px; }
+  .nav-item.disabled { color: var(--text-4); cursor: default; }
+  .soon-badge {
+    margin-left: auto; font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+    background: var(--warn-bg); color: var(--warn-text);
+  }
+  .nav-add {
+    margin-left: auto; width: 20px; height: 20px; border-radius: 6px; background: #1c2530; color: var(--teal);
+    font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    border: none; flex-shrink: 0;
+  }
+  .sidebar-langswitch { margin-bottom: 12px; }
+  .sidebar-footer { padding-top: 0; }
+  .logout-link {
+    width: 100%; border: 1px solid var(--border-2); background: transparent; color: var(--text-3);
+    font-weight: 600; font-size: 14px; padding: 11px 12px; border-radius: 10px; cursor: pointer;
+  }
+
+  /* ---------- main / header ---------- */
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #loading { text-align: center; padding: 80px 20px; color: var(--text-4); }
+
+  .workspace-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 24px 40px; border-bottom: 1px solid var(--border);
+  }
+  .breadcrumb { font-size: 12px; font-weight: 700; color: var(--text-4); }
+  .breadcrumb .sep { color: #3a4552; padding: 0 4px; }
+  .agent-title { font-size: 22px; font-weight: 800; color: var(--text-heading); margin-top: 4px; }
+  .btn-test-chat {
+    font-size: 14px; font-weight: 700; color: var(--teal-deep); background: var(--teal);
+    padding: 11px 22px; border-radius: 10px; cursor: pointer; border: none; flex-shrink: 0;
+  }
+
+  .tab-bar {
+    display: flex; flex-wrap: wrap; gap: 2px 4px; padding: 0 40px; border-bottom: 1px solid var(--border);
+  }
+  .tab-item {
+    padding: 14px 12px; font-size: 13.5px; font-weight: 600; color: var(--text-3);
+    border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none;
+    font-family: inherit;
+  }
+  .tab-item.active { color: var(--teal); border-bottom-color: var(--teal); }
+
+  .tab-panels { padding: 40px; max-width: 760px; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .panel-title { font-size: 19px; font-weight: 700; color: var(--text-heading-2); margin: 0; }
+  .panel-sub { font-size: 13.5px; color: var(--text-3); margin: 6px 0 0; }
+  .eyebrow { font-size: 12.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-4); text-transform: uppercase; margin: 26px 0 12px; }
+
+  label.field-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-2); margin: 0 0 6px; }
+  input[type=text], textarea {
+    width: 100%; box-sizing: border-box; font-family: inherit; font-size: 14px;
+    background: var(--bg); border: 1px solid var(--border-3); border-radius: 11px;
+    padding: 11px 14px; color: var(--text); outline: none;
+  }
+  textarea { resize: none; line-height: 1.55; border-radius: 13px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border-2); border-radius: 14px; padding: 20px;
+  }
+  .card + .card { margin-top: 14px; }
+  .row-between { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; }
+  .row-static { cursor: default; }
+  .row-title { font-size: 14.5px; font-weight: 700; color: var(--text-heading-2); }
+  .row-sub { font-size: 13px; color: var(--text-4); margin-top: 3px; }
+
+  .toggle {
+    width: 40px; height: 22px; border-radius: 999px; border: none; cursor: pointer;
+    background: var(--border-3); position: relative; flex-shrink: 0; padding: 0;
+  }
+  .toggle.on { background: var(--teal); }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--bg); transition: left 0.15s;
+  }
+  .toggle.on::after { left: 20px; }
+
+  .btn-teal {
+    font-weight: 700; font-size: 13.5px; color: var(--teal-deep); background: var(--teal);
+    padding: 9px 20px; border-radius: 9px; border: none; cursor: pointer; font-family: inherit;
+  }
+  .btn-teal:disabled { opacity: 0.6; cursor: default; }
+  .btn-teal.sm { padding: 8px 18px; }
+  .save-row { margin-top: 16px; display: flex; align-items: center; gap: 12px; }
+  .save-confirm { font-size: 13px; font-weight: 700; color: var(--teal); }
+
+  .stepper { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .stepper button {
+    width: 34px; height: 34px; border-radius: 9px; background: var(--border); border: 1px solid var(--border-3);
+    color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px;
+    font-family: inherit;
+  }
+  .stepper .value { font-size: 16px; font-weight: 700; color: var(--text-heading); min-width: 64px; text-align: center; }
+
+  /* Sozlamalar */
+  .settings-name-row { margin-top: 24px; display: flex; align-items: center; gap: 16px; }
+  .avatar-tile {
+    width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+    display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;
+  }
+
+  /* Prompting */
+  .tone-cards { display: flex; gap: 12px; }
+  .tone-card {
+    flex: 1; padding: 14px 16px; border-radius: 12px; border: 1.5px solid var(--border-3);
+    background: var(--bg); cursor: pointer;
+  }
+  .tone-card.selected { border-color: var(--teal); background: #12241f; }
+  .tone-card .t { font-size: 14px; font-weight: 700; color: var(--text-heading-2); }
+  .tone-card .s { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+
+  /* Bilimlar bazasi */
+  .file-drop {
+    margin-top: 16px; border: 1px dashed var(--border-3); border-radius: 13px; padding: 20px; text-align: center;
+  }
+  .file-drop.drag-over { border-color: var(--teal); background: #12241f; }
+  .file-drop .t { font-size: 13.5px; font-weight: 600; color: var(--text-2); }
+  .file-drop .s { font-size: 12.5px; color: #5c6672; margin-top: 4px; }
+
+  /* Integratsiyalar */
+  .integration-list { display: flex; flex-direction: column; gap: 12px; margin-top: 22px; }
+  .integration-row { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; }
+
+  /* Kanallar */
+  .channel-card { margin-top: 22px; padding: 22px; }
+  .channel-head { display: flex; align-items: center; justify-content: space-between; }
+  .channel-head-left { display: flex; align-items: center; gap: 12px; }
+  .channel-icon {
+    width: 38px; height: 38px; border-radius: 11px; background: #229ed9; display: flex;
+    align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;
+  }
+  .status-pill { font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
+  .status-pill.connected { color: var(--teal); background: var(--ok-bg); }
+  .status-pill.pending { color: var(--warn-text); background: var(--warn-bg); }
+  .field-help { font-size: 12.5px; color: var(--text-4); margin-top: 10px; line-height: 1.5; }
+  .field-error { font-size: 12.5px; color: var(--danger-text); margin-top: 10px; min-height: 1em; }
+
+  /* ---------- test chat drawer ---------- */
+  .drawer-overlay {
+    display: none; position: fixed; inset: 0; background: #05070a99; z-index: 60;
+    justify-content: flex-end;
+  }
+  .drawer-overlay.open { display: flex; }
+  .drawer {
+    width: 400px; max-width: 92vw; height: 100%; background: var(--card); border-left: 1px solid var(--border-3);
+    display: flex; flex-direction: column;
+  }
+  .drawer-head {
+    display: flex; align-items: center; justify-content: space-between; padding: 20px 22px; border-bottom: 1px solid var(--border-2);
+  }
+  .drawer-head .t { font-size: 15.5px; font-weight: 700; color: var(--text-heading-2); }
+  .drawer-head .s { font-size: 12.5px; color: var(--text-4); margin-top: 2px; }
+  .drawer-close { font-size: 16px; color: var(--text-4); cursor: pointer; padding: 4px 8px; background: none; border: none; }
+  .drawer-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .msg-row { display: flex; }
+  .msg-row.agent { justify-content: flex-start; }
+  .msg-row.user { justify-content: flex-end; }
+  .msg-bubble { max-width: 78%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; }
+  .msg-bubble.agent { background: #1c232c; color: var(--text); }
+  .msg-bubble.user { background: var(--teal); color: var(--teal-deep); }
+  .drawer-footer { padding: 16px 20px; border-top: 1px solid var(--border-2); display: flex; gap: 10px; }
+  .drawer-footer input { flex: 1; }
+  .send-btn {
+    width: 44px; height: 44px; border-radius: 11px; background: var(--teal); color: var(--teal-deep);
+    display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; border: none;
+  }
+  .send-btn:disabled { opacity: 0.6; cursor: default; }
+
+  /* ---------- toast ---------- */
+  .toast {
+    display: none; position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    background: var(--card); border: 1px solid var(--teal); color: var(--text); padding: 12px 22px;
+    border-radius: 11px; font-size: 14px; font-weight: 600; z-index: 90;
+  }
+  .toast.show { display: block; }
+
+  /* ---------- wizard modal ---------- */
+  .wizard-overlay {
+    display: none; position: fixed; inset: 0; background: #05070ab8; backdrop-filter: blur(4px);
+    align-items: center; justify-content: center; z-index: 80; padding: 20px;
+  }
+  .wizard-overlay.open { display: flex; }
+  .wizard-modal { width: 640px; max-width: 100%; background: var(--card); border: 1px solid var(--border-3); border-radius: 22px; overflow: hidden; max-height: 92vh; display: flex; flex-direction: column; }
+  .wizard-head { display: flex; align-items: center; justify-content: space-between; padding: 26px 30px 0; }
+  .wizard-head .t { font-size: 20px; font-weight: 800; color: var(--text-heading); }
+  .wizard-close { font-size: 16px; color: var(--text-4); cursor: pointer; padding: 4px 8px; background: none; border: none; }
+  .wizard-progress { display: flex; gap: 8px; padding: 22px 30px 26px; }
+  .wizard-progress .seg { flex: 1; height: 4px; border-radius: 4px; background: var(--border-2); }
+  .wizard-progress .seg.filled { background: var(--teal); }
+  .wizard-body { padding: 0 30px 30px; min-height: 260px; overflow-y: auto; }
+  .wizard-step { display: none; }
+  .wizard-step.active { display: block; }
+  .wizard-eyebrow { font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; color: var(--teal); }
+  .wizard-step-title { font-size: 19px; font-weight: 700; color: var(--text-heading-2); margin: 8px 0 0; }
+  .tone-options { display: flex; flex-direction: column; gap: 12px; margin-top: 22px; }
+  .tone-option {
+    display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-radius: 13px;
+    border: 1.5px solid var(--border-3); background: var(--bg); cursor: pointer;
+  }
+  .tone-option.selected { border-color: var(--teal); background: #12241f; }
+  .tone-option .t { font-size: 15px; font-weight: 700; color: var(--text-heading-2); }
+  .tone-option .s { font-size: 13px; color: var(--text-3); margin-top: 3px; }
+  .tone-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-3); flex-shrink: 0; }
+  .tone-option.selected .tone-radio { border-color: var(--teal); background: var(--teal); }
+  .wizard-limit-row { margin-top: 24px; display: flex; align-items: center; gap: 16px; }
+  .wizard-limit-row .stepper button { width: 44px; height: 44px; border-radius: 12px; font-size: 20px; }
+  .wizard-limit-value { flex: 1; text-align: center; font-size: 28px; font-weight: 800; color: var(--text-heading); }
+  .wizard-limit-value .unit { font-size: 14px; font-weight: 600; color: var(--text-4); margin-left: 6px; }
+  .wizard-textarea { margin-top: 18px; height: 140px; }
+  .wizard-token-card { margin-top: 18px; background: var(--bg); border: 1px solid var(--border-3); border-radius: 14px; padding: 20px; }
+  .wizard-token-card input { margin-top: 8px; background: var(--surface-alt); }
+  .wizard-footer { display: flex; align-items: center; justify-content: space-between; padding: 20px 30px; border-top: 1px solid var(--border-2); }
+  .wizard-back { font-size: 14px; font-weight: 600; color: var(--text-2); cursor: pointer; background: none; border: none; font-family: inherit; }
+  .wizard-next { font-size: 14.5px; font-weight: 700; color: var(--teal-deep); background: var(--teal); padding: 11px 26px; border-radius: 10px; cursor: pointer; border: none; font-family: inherit; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-mark"><div class="dot"></div></div>
+      <div class="wordmark">Dukan AI</div>
+    </div>
+    <div class="sidebar-account">
+      <div class="avatar-circle" id="avatar-initial">?</div>
+      <div class="account-name" id="sidebar-account-name">...</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7M5 10v10h14V10"/></svg>
+        <span data-i18n="nav.home">Bosh sahifa</span>
+      </a>
+      <span class="nav-item disabled">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-8.9 8.49 8.6 8.6 0 0 1-3.36-.69L3 21l1.7-5.74A8.5 8.5 0 1 1 21 11.5Z"/></svg>
+        <span data-i18n="nav.inbox">Suhbatlar</span>
+        <span class="soon-badge" data-i18n="nav.soon">tez kunda</span>
+      </span>
+      <a href="/dashboard/automations" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>
+        <span data-i18n="nav.automation">Avtomatlashtirish</span>
+      </a>
+      <a href="/dashboard/agents" class="nav-item sub active">
+        <span style="font-size:14px;">&#9671;</span>
+        <span data-i18n="nav.agents" style="flex:1">Agentlar</span>
+        <button type="button" class="nav-add" id="sidebar-new-agent" title="Yangi agent">+</button>
+      </a>
+      <a href="/dashboard/settings" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        <span data-i18n="nav.settings">Sozlamalar</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-langswitch" id="lang-switch"></div>
+      <button class="logout-link" id="logout" data-i18n="sidebar.logout">Chiqish</button>
+    </div>
+  </aside>
+
+  <main>
+    <div id="loading" data-i18n="common.loading">Yuklanmoqda...</div>
+
+    <div id="content" style="display:none">
+      <div class="workspace-header">
+        <div>
+          <div class="breadcrumb">
+            <a href="/dashboard/agents" data-i18n="agents.workspace.breadcrumb">AGENTLAR</a>
+            <span class="sep">&rsaquo;</span>
+            <span id="breadcrumb-name"></span>
+          </div>
+          <div class="agent-title" id="agent-title"></div>
+        </div>
+        <button type="button" class="btn-test-chat" id="open-test-chat" data-i18n="agents.workspace.testChat">&#128172; Test chat</button>
+      </div>
+
+      <div class="tab-bar" id="tab-bar">
+        <button type="button" class="tab-item" data-tab="settings" data-i18n="agents.workspace.tabSettings">Sozlamalar</button>
+        <button type="button" class="tab-item" data-tab="prompting" data-i18n="agents.workspace.tabPrompting">Prompting</button>
+        <button type="button" class="tab-item" data-tab="messages" data-i18n="agents.workspace.tabMessages">Xabarlar</button>
+        <button type="button" class="tab-item" data-tab="control" data-i18n="agents.workspace.tabControl">Nazorat</button>
+        <button type="button" class="tab-item" data-tab="knowledge" data-i18n="agents.workspace.tabKnowledge">Bilimlar bazasi</button>
+        <button type="button" class="tab-item" data-tab="integrations" data-i18n="agents.workspace.tabIntegrations">Integratsiyalar</button>
+        <button type="button" class="tab-item" data-tab="channels" data-i18n="agents.workspace.tabChannels">Kanallar</button>
+      </div>
+
+      <div class="tab-panels">
+
+        <!-- Sozlamalar -->
+        <div class="tab-panel" data-panel="settings">
+          <div class="panel-title" data-i18n="agents.workspace.settingsTitle">Sozlamalar</div>
+          <div class="panel-sub" data-i18n="agents.workspace.settingsSub">Agentning nomi, holati va ish vaqti.</div>
+
+          <div class="settings-name-row">
+            <div class="avatar-tile">&#9671;</div>
+            <div style="flex:1">
+              <label class="field-label" data-i18n="agents.workspace.nameLabel">Agent nomi</label>
+              <input type="text" id="agent-name-input">
+            </div>
+          </div>
+
+          <div class="card row-between" id="active-toggle-row" style="margin-top:24px">
+            <div>
+              <div class="row-title" data-i18n="agents.workspace.activeTitle">Agent faol</div>
+              <div class="row-sub" data-i18n="agents.workspace.activeSub">Yoqilganda mijozlarga avtomatik javob beradi.</div>
+            </div>
+            <button type="button" class="toggle" id="active-toggle"></button>
+          </div>
+
+          <div class="eyebrow" data-i18n="agents.workspace.hoursLabel">ISH VAQTI</div>
+          <div class="card row-between row-static">
+            <div style="font-size:14px;color:#c9d1da" data-i18n="agents.workspace.hoursValue">Dush-Yak, 09:00 – 21:00</div>
+            <div style="font-size:13px;font-weight:600;color:var(--teal);cursor:pointer" data-i18n="agents.workspace.hoursChange">O'zgartirish</div>
+          </div>
+        </div>
+
+        <!-- Prompting -->
+        <div class="tab-panel" data-panel="prompting">
+          <div class="panel-title" data-i18n="agents.workspace.promptingTitle">Prompting</div>
+          <div class="panel-sub" data-i18n="agents.workspace.promptingSub">Agentning ohangi va asosiy ko'rsatmalari.</div>
+
+          <div class="eyebrow" data-i18n="agents.workspace.toneLabel">OHANG</div>
+          <div class="tone-cards" id="prompting-tone-cards">
+            <div class="tone-card" data-tone="polite">
+              <div class="t" data-i18n="agents.workspace.tonePoliteTitle">Muloyim</div>
+              <div class="s" data-i18n="agents.workspace.tonePoliteSub">Iliq va do'stona</div>
+            </div>
+            <div class="tone-card" data-tone="formal">
+              <div class="t" data-i18n="agents.workspace.toneFormalTitle">Rasmiy</div>
+              <div class="s" data-i18n="agents.workspace.toneFormalSub">Aniq va professional</div>
+            </div>
+          </div>
+
+          <div class="eyebrow" data-i18n="agents.workspace.instructionsLabel">ASOSIY YO'RIQNOMA</div>
+          <textarea id="instructions-textarea" style="height:130px" data-i18n-placeholder="agents.workspace.instructionsPlaceholder" placeholder="Agent qanday xatti-harakat qilishi kerakligini yozing..."></textarea>
+          <div class="save-row">
+            <button type="button" class="btn-teal" id="prompting-save" data-i18n="agents.workspace.save">Saqlash</button>
+            <span class="save-confirm" id="prompting-saved" style="display:none" data-i18n="agents.workspace.saved">Saqlandi &#10003;</span>
+          </div>
+        </div>
+
+        <!-- Xabarlar -->
+        <div class="tab-panel" data-panel="messages">
+          <div class="panel-title" data-i18n="agents.workspace.messagesTitle">Xabarlar</div>
+          <div class="panel-sub" data-i18n="agents.workspace.messagesSub">Javoblar qanday yetkazilishini sozlang.</div>
+
+          <div class="card row-between" id="split-toggle-row" style="margin-top:22px">
+            <div>
+              <div class="row-title" data-i18n="agents.workspace.splitTitle">Xabarlarni bo'lib yuborish</div>
+              <div class="row-sub" data-i18n="agents.workspace.splitSub">Har bir paragrafni alohida xabar sifatida yuborish.</div>
+            </div>
+            <button type="button" class="toggle" id="split-toggle"></button>
+          </div>
+
+          <div class="card row-between row-static">
+            <div>
+              <div class="row-title" data-i18n="agents.workspace.limitTitle">Foydalanuvchi uchun kunlik limit</div>
+              <div class="row-sub" data-i18n="agents.workspace.limitSub">Har bir mijoz kuniga necha marta yozishi mumkin.</div>
+            </div>
+            <div class="stepper">
+              <button type="button" id="limit-dec">&minus;</button>
+              <div class="value"><span id="limit-value">20</span> <span data-i18n="agents.workspace.limitUnit" style="font-size:12px;color:var(--text-4)">ta / kuniga</span></div>
+              <button type="button" id="limit-inc">+</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nazorat -->
+        <div class="tab-panel" data-panel="control">
+          <div class="panel-title" data-i18n="agents.workspace.controlTitle">Nazorat</div>
+          <div class="panel-sub" data-i18n="agents.workspace.controlSub">Operator aralashuvi va spam himoyasi.</div>
+
+          <div class="card row-between" id="pause-toggle-row" style="margin-top:22px">
+            <div>
+              <div class="row-title" data-i18n="agents.workspace.pauseTitle">Operator yozganda to'xtatish</div>
+              <div class="row-sub" data-i18n="agents.workspace.pauseSub">Inson operator suhbatga qo'shilsa, agent vaqtincha to'xtaydi.</div>
+            </div>
+            <button type="button" class="toggle" id="pause-toggle"></button>
+          </div>
+
+          <div class="card row-static">
+            <div class="row-title" data-i18n="agents.workspace.keywordsTitle">To'xtatuvchi kalit so'zlar</div>
+            <div class="row-sub" style="margin-bottom:12px" data-i18n="agents.workspace.keywordsSub">Mijoz shu so'zlarni yozsa, agent javob berishni to'xtatadi.</div>
+            <input type="text" id="stop-keywords-input" data-i18n-placeholder="agents.workspace.keywordsPlaceholder" placeholder="masalan: operator, yordam">
+          </div>
+        </div>
+
+        <!-- Bilimlar bazasi -->
+        <div class="tab-panel" data-panel="knowledge">
+          <div class="panel-title" data-i18n="agents.workspace.knowledgeTitle">Bilimlar bazasi</div>
+          <div class="panel-sub" data-i18n="agents.workspace.knowledgeSub">Agent qaysi ma'lumotlar asosida javob berishini kiriting.</div>
+
+          <textarea id="knowledge-textarea" style="height:160px;margin-top:20px" data-i18n-placeholder="agents.workspace.knowledgePlaceholder" placeholder="Masalan: Bizning do'kon 9:00-21:00 ishlaydi. Yetkazib berish Toshkent bo'ylab 1 kun ichida, narxi 20 000 so'm. Mahsulotlar: ..."></textarea>
+
+          <div class="file-drop" id="file-drop">
+            <div class="t" data-i18n="agents.workspace.fileDropTitle">Fayl yuklash (PDF, DOCX)</div>
+            <div class="s" data-i18n="agents.workspace.fileDropSub">yoki torting va tashlang</div>
+          </div>
+
+          <div class="save-row">
+            <button type="button" class="btn-teal" id="knowledge-save" data-i18n="agents.workspace.save">Saqlash</button>
+            <span class="save-confirm" id="knowledge-saved" style="display:none" data-i18n="agents.workspace.saved">Saqlandi &#10003;</span>
+          </div>
+        </div>
+
+        <!-- Integratsiyalar -->
+        <div class="tab-panel" data-panel="integrations">
+          <div class="panel-title" data-i18n="agents.workspace.integrationsTitle">Integratsiyalar</div>
+          <div class="panel-sub" data-i18n="agents.workspace.integrationsSub">Biznes vositalaringizni ulang.</div>
+
+          <div class="integration-list">
+            <div class="card integration-row">
+              <div>
+                <div class="row-title" data-i18n="agents.workspace.sheetsTitle">Google Sheets</div>
+                <div class="row-sub" data-i18n="agents.workspace.sheetsSub">Buyurtmalarni jadvalga avtomatik yozish.</div>
+              </div>
+              <button type="button" class="btn-teal sm" data-i18n="common.connect">Ulash</button>
+            </div>
+            <div class="card integration-row">
+              <div>
+                <div class="row-title" data-i18n="agents.workspace.amoTitle">AmoCRM</div>
+                <div class="row-sub" data-i18n="agents.workspace.amoSub">Mijozlarni CRM'ga sinxronlash.</div>
+              </div>
+              <button type="button" class="btn-teal sm" data-i18n="common.connect">Ulash</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kanallar -->
+        <div class="tab-panel" data-panel="channels">
+          <div class="panel-title" data-i18n="agents.workspace.channelsTitle">Kanallar</div>
+          <div class="panel-sub" data-i18n="agents.workspace.channelsSub">Agent qaysi kanallar orqali javob bersin.</div>
+
+          <div class="card channel-card">
+            <div class="channel-head">
+              <div class="channel-head-left">
+                <div class="channel-icon">&#9992;</div>
+                <div class="row-title" data-i18n="agents.workspace.telegramBotTitle">Telegram bot</div>
+              </div>
+              <span class="status-pill pending" id="telegram-status-pill" data-i18n="common.notConnected">Ulanmagan</span>
+            </div>
+
+            <label class="field-label" style="margin-top:20px" data-i18n="agents.workspace.tokenLabel">Bot tokeni</label>
+            <input type="text" id="telegram-token-input" data-i18n-placeholder="agents.workspace.tokenPlaceholder" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+            <div class="field-help" data-i18n="agents.workspace.tokenHelp">Token olish uchun Telegramdagi @BotFather orqali bot yarating.</div>
+            <div class="field-error" id="telegram-error"></div>
+            <div class="save-row">
+              <button type="button" class="btn-teal" id="telegram-connect" data-i18n="common.connect">Ulash</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Test chat drawer -->
+<div class="drawer-overlay" id="drawer-overlay">
+  <div class="drawer">
+    <div class="drawer-head">
+      <div>
+        <div class="t" data-i18n="agents.workspace.testChatTitle">Test chat</div>
+        <div class="s" id="drawer-sub"></div>
+      </div>
+      <button type="button" class="drawer-close" id="close-test-chat">&#10005;</button>
+    </div>
+    <div class="drawer-messages" id="drawer-messages"></div>
+    <div class="drawer-footer">
+      <input type="text" id="chat-input" data-i18n-placeholder="agents.workspace.chatPlaceholder" placeholder="Xabar yozing...">
+      <button type="button" class="send-btn" id="chat-send">&#10148;</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" data-i18n="agents.workspace.toastCreated">Yangi agent yaratildi</div>
+
+<!-- Creation wizard -->
+<div class="wizard-overlay" id="wizard-overlay">
+  <div class="wizard-modal">
+    <div class="wizard-head">
+      <div class="t" data-i18n="agents.wizard.title">Yangi agent yaratish</div>
+      <button type="button" class="wizard-close" id="wizard-close">&#10005;</button>
+    </div>
+    <div class="wizard-progress" id="wizard-progress">
+      <div class="seg" data-seg="0"></div>
+      <div class="seg" data-seg="1"></div>
+      <div class="seg" data-seg="2"></div>
+      <div class="seg" data-seg="3"></div>
+    </div>
+    <div class="wizard-body">
+
+      <div class="wizard-step" data-step="0">
+        <div class="wizard-eyebrow" data-i18n="agents.wizard.step1Eyebrow">1-QADAM &middot; OHANG</div>
+        <div class="wizard-step-title" data-i18n="agents.wizard.step1Title">Agent qanday ohangda gaplashsin?</div>
+        <div class="tone-options" id="wizard-tone-options">
+          <div class="tone-option" data-tone="polite">
+            <div><div class="t" data-i18n="agents.workspace.tonePoliteTitle">Muloyim</div><div class="s" data-i18n="agents.wizard.tonePoliteDesc">Iliq, samimiy va do'stona uslubda javob beradi.</div></div>
+            <div class="tone-radio"></div>
+          </div>
+          <div class="tone-option" data-tone="formal">
+            <div><div class="t" data-i18n="agents.workspace.toneFormalTitle">Rasmiy</div><div class="s" data-i18n="agents.wizard.toneFormalDesc">Aniq, qisqa va professional uslubda javob beradi.</div></div>
+            <div class="tone-radio"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wizard-step" data-step="1">
+        <div class="wizard-eyebrow" data-i18n="agents.wizard.step2Eyebrow">2-QADAM &middot; LIMIT</div>
+        <div class="wizard-step-title" data-i18n="agents.wizard.step2Title">Bir foydalanuvchi uchun xabar limiti</div>
+        <div class="wizard-limit-row">
+          <div class="stepper"><button type="button" id="wizard-limit-dec">&minus;</button></div>
+          <div class="wizard-limit-value"><span id="wizard-limit-value">20</span><span class="unit" data-i18n="agents.workspace.limitUnit">ta / kuniga</span></div>
+          <div class="stepper"><button type="button" id="wizard-limit-inc">+</button></div>
+        </div>
+      </div>
+
+      <div class="wizard-step" data-step="2">
+        <div class="wizard-eyebrow" data-i18n="agents.wizard.step3Eyebrow">3-QADAM &middot; MA'LUMOTLAR</div>
+        <div class="wizard-step-title" data-i18n="agents.wizard.step3Title">Agent qaysi ma'lumotlar asosida javob bersin?</div>
+        <textarea class="wizard-textarea" id="wizard-info-textarea" data-i18n-placeholder="agents.wizard.step3Placeholder" placeholder="Masalan: Bizning do'kon 9:00-21:00 ishlaydi..."></textarea>
+      </div>
+
+      <div class="wizard-step" data-step="3">
+        <div class="wizard-eyebrow" data-i18n="agents.wizard.step4Eyebrow">4-QADAM &middot; ULANISH</div>
+        <div class="wizard-step-title" data-i18n="agents.wizard.step4Title">Telegram botga ulash</div>
+        <div class="wizard-token-card">
+          <label class="field-label" data-i18n="agents.workspace.tokenLabel">Bot tokeni</label>
+          <input type="text" id="wizard-token-input" data-i18n-placeholder="agents.workspace.tokenPlaceholder" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+          <div class="field-help" data-i18n="agents.workspace.tokenHelp">Token olish uchun Telegramdagi @BotFather orqali bot yarating.</div>
+          <div class="field-error" id="wizard-error"></div>
+        </div>
+      </div>
+
+    </div>
+    <div class="wizard-footer">
+      <button type="button" class="wizard-back" id="wizard-back"></button>
+      <button type="button" class="wizard-next" id="wizard-next"></button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/i18n.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  let merchant = null;
+  let agent = null;
+  let activeTab = 'settings';
+  let chatMessages = [];
+
+  // ---------------------------------------------------------------
+  // agent id comes from the URL path (/dashboard/agents/{id}) - the
+  // server-side route (app/web/router.py) doesn't need it, it's read
+  // back out here for the client-driven fetch pattern used across
+  // this static-page site (see dashboard_automations.html's init()).
+  // ---------------------------------------------------------------
+  function currentAgentId() {
+    const parts = window.location.pathname.replace(/\/+$/, '').split('/');
+    return parts[parts.length - 1];
+  }
+
+  async function api(path, options) {
+    const res = await fetch(path, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...options });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const err = new Error(body.detail || Dukan18n.t('common.error'));
+      err.status = res.status;
+      throw err;
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  // ---------------- tabs ----------------
+  function setTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('.tab-item').forEach((el) => el.classList.toggle('active', el.dataset.tab === tab));
+    document.querySelectorAll('.tab-panel').forEach((el) => el.classList.toggle('active', el.dataset.panel === tab));
+  }
+  $('tab-bar').addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-item');
+    if (btn) setTab(btn.dataset.tab);
+  });
+
+  // ---------------- render agent into the panels ----------------
+  function toneCardEls() {
+    return { polite: document.querySelector('#prompting-tone-cards [data-tone="polite"]'), formal: document.querySelector('#prompting-tone-cards [data-tone="formal"]') };
+  }
+
+  function renderAgent() {
+    $('breadcrumb-name').textContent = agent.name || Dukan18n.t('agents.wizard.defaultName');
+    $('agent-title').textContent = agent.name || Dukan18n.t('agents.wizard.defaultName');
+    document.title = (agent.name || 'Agent') + ' — Dukan AI';
+
+    // Sozlamalar
+    $('agent-name-input').value = agent.name || '';
+    $('active-toggle').classList.toggle('on', !!agent.active);
+
+    // Prompting
+    const tones = toneCardEls();
+    tones.polite.classList.toggle('selected', agent.tone === 'polite');
+    tones.formal.classList.toggle('selected', agent.tone === 'formal');
+
+    // Xabarlar
+    $('split-toggle').classList.toggle('on', !!agent.split_messages);
+    $('limit-value').textContent = agent.daily_limit;
+
+    // Nazorat
+    $('pause-toggle').classList.toggle('on', !!agent.operator_pause);
+    $('stop-keywords-input').value = agent.stop_keywords || '';
+
+    // Bilimlar bazasi
+    $('knowledge-textarea').value = agent.knowledge_text || '';
+
+    // Kanallar
+    renderTelegramStatus();
+
+    // Test chat subtitle / greeting
+    $('drawer-sub').textContent = Dukan18n.t('agents.workspace.testChatSubtitle', { name: agent.name || Dukan18n.t('agents.wizard.defaultName') });
+    if (chatMessages.length === 0) {
+      chatMessages.push({ from: 'agent', text: Dukan18n.t('agents.workspace.chatGreeting', { name: agent.name || Dukan18n.t('agents.wizard.defaultName') }) });
+      renderChatMessages();
+    }
+  }
+
+  function renderTelegramStatus() {
+    const pill = $('telegram-status-pill');
+    const btn = $('telegram-connect');
+    if (agent.telegram_connected) {
+      pill.textContent = Dukan18n.t('common.connected');
+      pill.classList.remove('pending');
+      pill.classList.add('connected');
+      btn.textContent = Dukan18n.t('common.connected') + ' ✓';
+    } else {
+      pill.textContent = Dukan18n.t('common.notConnected');
+      pill.classList.remove('connected');
+      pill.classList.add('pending');
+      btn.textContent = Dukan18n.t('common.connect');
+    }
+  }
+
+  // ---------------- Sozlamalar ----------------
+  $('agent-name-input').addEventListener('blur', async () => {
+    const value = $('agent-name-input').value.trim();
+    if (!value || value === agent.name) return;
+    agent = await api(`/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ name: value }) });
+    renderAgent();
+  });
+  $('active-toggle-row').addEventListener('click', async () => {
+    const next = !agent.active;
+    $('active-toggle').classList.toggle('on', next);
+    agent = await api(`/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ active: next }) });
+  });
+
+  // ---------------- Prompting ----------------
+  // Tone cards select locally; persisted (along with the rest of the tab)
+  // only when "Saqlash" is pressed - same as the design prototype. The
+  // "Asosiy yo'riqnoma" textarea has no backing field in the agreed
+  // AgentOut contract (no separate instructions column), so - matching
+  // the prototype, where this Saqlash button has no onClick at all -
+  // it's left as visual/local-only for now; only tone is actually PATCHed.
+  let draftTone = null;
+  document.querySelectorAll('#prompting-tone-cards .tone-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      draftTone = card.dataset.tone;
+      const tones = toneCardEls();
+      tones.polite.classList.toggle('selected', draftTone === 'polite');
+      tones.formal.classList.toggle('selected', draftTone === 'formal');
+    });
+  });
+  $('prompting-save').addEventListener('click', async () => {
+    const tone = draftTone || agent.tone;
+    agent = await api(`/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ tone }) });
+    draftTone = null;
+    $('prompting-saved').style.display = 'inline';
+    setTimeout(() => { $('prompting-saved').style.display = 'none'; }, 1800);
+  });
+
+  // ---------------- Xabarlar ----------------
+  $('split-toggle-row').addEventListener('click', async () => {
+    const next = !agent.split_messages;
+    $('split-toggle').classList.toggle('on', next);
+    agent = await api(`/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ split_messages: next }) });
+  });
+
+  let limitSaveTimer = null;
+  function scheduleLimitSave() {
+    clearTimeout(limitSaveTimer);
+    limitSaveTimer = setTimeout(async () => {
+      agent = await api(`/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ daily_limit: agent.daily_limit }) });
+    }, 350);
+  }
+  $('limit-dec').addEventListener('click', () => {
+    agent.daily_limit = Math.max(1, agent.daily_limit - 5);
+    $('limit-value').textContent = agent.daily_limit;
+    scheduleLimitSave();
+  });
+  $('limit-inc').addEventListener('click', () => {
+    agent.daily_limit = Math.min(200, agent.daily_limit + 5);
+    $('limit-value').textContent = agent.daily_limit;
+    scheduleLimitSave();
+  });
+
+  // ---------------- Nazorat ----------------
+  $('pause-toggle-row').addEventListener('click', async () => {
+    const next = !agent.operator_pause;
+    $('pause-toggle').classList.toggle('on', next);
+    agent = await api(`/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ operator_pause: next }) });
+  });
+  $('stop-keywords-input').addEventListener('blur', async () => {
+    const value = $('stop-keywords-input').value;
+    if (value === (agent.stop_keywords || '')) return;
+    agent = await api(`/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ stop_keywords: value }) });
+  });
+
+  // ---------------- Bilimlar bazasi ----------------
+  const fileDrop = $('file-drop');
+  ['dragenter', 'dragover'].forEach((evt) => fileDrop.addEventListener(evt, (e) => { e.preventDefault(); fileDrop.classList.add('drag-over'); }));
+  ['dragleave', 'drop'].forEach((evt) => fileDrop.addEventListener(evt, (e) => { e.preventDefault(); fileDrop.classList.remove('drag-over'); }));
+  // Visual only, per design - no real upload wiring yet.
+
+  $('knowledge-save').addEventListener('click', async () => {
+    agent = await api(`/agents/${agent.id}`, { method: 'PATCH', body: JSON.stringify({ knowledge_text: $('knowledge-textarea').value }) });
+    $('knowledge-saved').style.display = 'inline';
+    setTimeout(() => { $('knowledge-saved').style.display = 'none'; }, 1800);
+  });
+
+  // ---------------- Kanallar ----------------
+  $('telegram-connect').addEventListener('click', async () => {
+    const token = $('telegram-token-input').value.trim();
+    if (!token) return;
+    $('telegram-error').textContent = '';
+    $('telegram-connect').disabled = true;
+    try {
+      agent = await api(`/agents/${agent.id}/telegram/connect`, { method: 'POST', body: JSON.stringify({ token }) });
+      renderTelegramStatus();
+    } catch (err) {
+      $('telegram-error').textContent = err.status === 400 ? Dukan18n.t('agents.workspace.tokenInvalid') : err.message;
+    } finally {
+      $('telegram-connect').disabled = false;
+    }
+  });
+
+  // ---------------- Test chat drawer ----------------
+  function renderChatMessages() {
+    const host = $('drawer-messages');
+    host.innerHTML = '';
+    for (const msg of chatMessages) {
+      const row = document.createElement('div');
+      row.className = 'msg-row ' + msg.from;
+      const bubble = document.createElement('div');
+      bubble.className = 'msg-bubble ' + msg.from;
+      bubble.textContent = msg.text;
+      row.appendChild(bubble);
+      host.appendChild(row);
+    }
+    host.scrollTop = host.scrollHeight;
+  }
+
+  function openTestChat() { $('drawer-overlay').classList.add('open'); }
+  function closeTestChat() { $('drawer-overlay').classList.remove('open'); }
+  $('open-test-chat').addEventListener('click', openTestChat);
+  $('close-test-chat').addEventListener('click', closeTestChat);
+  $('drawer-overlay').addEventListener('click', (e) => { if (e.target === $('drawer-overlay')) closeTestChat(); });
+
+  async function sendChatMessage() {
+    const input = $('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    chatMessages.push({ from: 'user', text });
+    input.value = '';
+    renderChatMessages();
+    $('chat-send').disabled = true;
+    try {
+      const res = await api(`/agents/${agent.id}/test-chat`, { method: 'POST', body: JSON.stringify({ message: text }) });
+      chatMessages.push({ from: 'agent', text: res.reply });
+    } catch (err) {
+      chatMessages.push({ from: 'agent', text: Dukan18n.t('agents.workspace.chatError') });
+    } finally {
+      $('chat-send').disabled = false;
+      renderChatMessages();
+    }
+  }
+  $('chat-send').addEventListener('click', sendChatMessage);
+  $('chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
+
+  // ---------------- Creation wizard (duplicated onto this page for the
+  // sidebar's "+" quick-create, same as the sibling Agentlar list page) ----------------
+  let wizardStep = 0;
+  let wizardDraft = { tone: 'polite', limit: 20, info: '', token: '' };
+
+  function renderWizard() {
+    document.querySelectorAll('.wizard-progress .seg').forEach((seg) => {
+      seg.classList.toggle('filled', Number(seg.dataset.seg) <= wizardStep);
+    });
+    document.querySelectorAll('.wizard-step').forEach((step) => {
+      step.classList.toggle('active', Number(step.dataset.step) === wizardStep);
+    });
+    document.querySelectorAll('#wizard-tone-options .tone-option').forEach((opt) => {
+      opt.classList.toggle('selected', opt.dataset.tone === wizardDraft.tone);
+    });
+    $('wizard-limit-value').textContent = wizardDraft.limit;
+    $('wizard-info-textarea').value = wizardDraft.info;
+    $('wizard-token-input').value = wizardDraft.token;
+    $('wizard-back').textContent = wizardStep === 0 ? Dukan18n.t('agents.wizard.cancel') : Dukan18n.t('agents.wizard.back');
+    $('wizard-next').textContent = wizardStep === 3 ? Dukan18n.t('agents.wizard.finish') : Dukan18n.t('agents.wizard.continue');
+    $('wizard-error').textContent = '';
+  }
+
+  function openWizard() {
+    wizardStep = 0;
+    wizardDraft = { tone: 'polite', limit: 20, info: '', token: '' };
+    renderWizard();
+    $('wizard-overlay').classList.add('open');
+  }
+  function closeWizard() { $('wizard-overlay').classList.remove('open'); }
+
+  $('sidebar-new-agent').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openWizard(); });
+  $('wizard-close').addEventListener('click', closeWizard);
+  $('wizard-overlay').addEventListener('click', (e) => { if (e.target === $('wizard-overlay')) closeWizard(); });
+
+  document.querySelectorAll('#wizard-tone-options .tone-option').forEach((opt) => {
+    opt.addEventListener('click', () => { wizardDraft.tone = opt.dataset.tone; renderWizard(); });
+  });
+  $('wizard-limit-dec').addEventListener('click', () => { wizardDraft.limit = Math.max(1, wizardDraft.limit - 5); renderWizard(); });
+  $('wizard-limit-inc').addEventListener('click', () => { wizardDraft.limit = Math.min(200, wizardDraft.limit + 5); renderWizard(); });
+  $('wizard-info-textarea').addEventListener('input', (e) => { wizardDraft.info = e.target.value; });
+  $('wizard-token-input').addEventListener('input', (e) => { wizardDraft.token = e.target.value; });
+
+  function showToast() {
+    $('toast').classList.add('show');
+    setTimeout(() => $('toast').classList.remove('show'), 2200);
+  }
+
+  $('wizard-back').addEventListener('click', () => {
+    if (wizardStep === 0) { closeWizard(); return; }
+    wizardStep -= 1;
+    renderWizard();
+  });
+
+  $('wizard-next').addEventListener('click', async () => {
+    if (wizardStep < 3) { wizardStep += 1; renderWizard(); return; }
+
+    // Finish: create the agent, per the agreed contract - name isn't
+    // collected anywhere in this wizard (matches the design prototype,
+    // which has no name step either), so a default is used; the merchant
+    // can rename it from the Sozlamalar tab afterwards.
+    $('wizard-next').disabled = true;
+    $('wizard-error').textContent = '';
+    try {
+      let created = await api('/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: Dukan18n.t('agents.wizard.defaultName'),
+          tone: wizardDraft.tone,
+          daily_limit: wizardDraft.limit,
+          knowledge_text: wizardDraft.info,
+        }),
+      });
+      if (wizardDraft.token.trim()) {
+        try {
+          created = await api(`/agents/${created.id}/telegram/connect`, { method: 'POST', body: JSON.stringify({ token: wizardDraft.token.trim() }) });
+        } catch (tokenErr) {
+          // Agent exists but the token was bad - let the merchant fix it
+          // from the new agent's own Kanallar tab rather than losing the
+          // agent they just created.
+        }
+      }
+      closeWizard();
+      showToast();
+      setTimeout(() => { window.location.href = `/dashboard/agents/${created.id}`; }, 900);
+    } catch (err) {
+      $('wizard-error').textContent = err.message || Dukan18n.t('agents.wizard.createError');
+    } finally {
+      $('wizard-next').disabled = false;
+    }
+  });
+
+  // ---------------- bootstrap ----------------
+  async function init() {
+    Dukan18n.initI18n('lang-switch');
+
+    const res = await fetch('/auth/me', { credentials: 'same-origin' });
+    if (!res.ok) {
+      window.location.href = '/signup';
+      return;
+    }
+    merchant = await res.json();
+    Dukan18n.syncLangFromMerchant(merchant.ui_language, (lang) => {
+      fetch('/auth/me', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ui_language: lang }),
+      });
+    });
+    $('sidebar-account-name').textContent = merchant.name || merchant.owner_name || merchant.email || Dukan18n.t('common.account');
+    $('avatar-initial').textContent = (merchant.owner_name || merchant.email || '?').charAt(0).toUpperCase();
+
+    try {
+      agent = await api(`/agents/${currentAgentId()}`);
+    } catch (err) {
+      window.location.href = '/dashboard/agents';
+      return;
+    }
+
+    $('loading').style.display = 'none';
+    $('content').style.display = 'block';
+    renderAgent();
+    setTab('settings');
+  }
+
+  $('logout').addEventListener('click', async () => {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    window.location.href = '/signup';
+  });
+
+  init();
+</script>
+</body>
+</html>

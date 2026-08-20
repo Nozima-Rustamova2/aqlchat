@@ -149,6 +149,7 @@ class Merchant(Base):
     flows: Mapped[list["Flow"]] = relationship(back_populates="merchant")
     faqs: Mapped[list["Faq"]] = relationship(back_populates="merchant")
     admins: Mapped[list["MerchantAdmin"]] = relationship(back_populates="merchant")
+    agents: Mapped[list["Agent"]] = relationship(back_populates="merchant")
 
 
 class MerchantAdmin(Base):
@@ -552,3 +553,68 @@ class WebSession(Base):
     expires_at: Mapped[datetime] = mapped_column()
     revoked_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
+class Agent(Base):
+    """A merchant-configurable AI persona ("Agentlar" feature - see
+    design_handoff_dukan_ai_agents/README.md) that auto-replies to
+    customers through its OWN Telegram bot connection.
+
+    Deliberately NEW, parallel infrastructure - NOT a reuse or migration
+    of Merchant.telegram_bot_token/telegram_bot_id above, which power the
+    already-shipped core onboarding Telegram service (app/onboarding/,
+    set up once per merchant during self-serve onboarding). A merchant may
+    have zero or more Agent rows, each independently connected to its own
+    bot token, so the encrypted-token/bot-id pair lives here instead of on
+    Merchant. app/agents/router.py is the merchant-facing CRUD + connect +
+    test-chat API for this table.
+    """
+
+    __tablename__ = "agents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    # 'polite' | 'formal' - not DB-enforced, matching the
+    # vertical/pipeline_mode precedent on Merchant above (app-level
+    # workflow state, not a fixed domain a constraint should police).
+    tone: Mapped[str] = mapped_column(String(16), default="polite", server_default="polite")
+    # Per-end-customer daily reply cap (design's stepper: step 5, min 1,
+    # max 200, default 20) - enforcement is future scope (see
+    # app/agents/router.py's test-chat stub docstring), this column just
+    # stores the configured value today.
+    daily_limit: Mapped[int] = mapped_column(default=20, server_default="20")
+    # Free text the agent should ground its answers on (hours, delivery,
+    # pricing, products) - same "small text blob, not chunked/embedded
+    # yet" scope call as the design doc's own note on this field.
+    knowledge_text: Mapped[str] = mapped_column(Text, default="", server_default="")
+    active: Mapped[bool] = mapped_column(default=True, server_default="true")
+    # Splits a single reply into multiple separate Telegram messages
+    # instead of one bubble - purely a delivery-formatting toggle, read by
+    # the (future) real send path, not by anything in this migration.
+    split_messages: Mapped[bool] = mapped_column(default=False, server_default="false")
+    # Auto-pause this agent's replies on a thread once a human operator
+    # has typed in it - mirrors Conversation.needs_human's Layer-5 pause
+    # concept but is a per-agent config toggle here, not runtime state.
+    operator_pause: Mapped[bool] = mapped_column(default=True, server_default="true")
+    # Comma-separated keywords that stop the agent from auto-replying on a
+    # thread when matched (e.g. "operator, admin") - plain text like
+    # Flow.trigger_value elsewhere, parsed by the (future) real send path.
+    stop_keywords: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Encrypted at rest, same EncryptedString pattern as
+    # Merchant.telegram_bot_token/instagram_access_token above. NOT
+    # unique for the same Fernet-randomized-ciphertext reason those
+    # columns aren't either.
+    telegram_bot_token: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+    # The bot's own numeric Telegram ID, from a REAL getMe call made by
+    # app/agents/router.py's telegram/connect endpoint - unlike
+    # scripts/seed_merchant.py's best-effort _try_get_me, a failed getMe
+    # here means the token is never stored at all (the endpoint 400s), so
+    # this column being non-null IS the "telegram_connected" signal.
+    # Unique across all agents (any merchant) for the same reason
+    # Merchant.telegram_bot_id is: one Telegram bot belongs to one owner.
+    telegram_bot_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+    merchant: Mapped["Merchant"] = relationship(back_populates="agents")

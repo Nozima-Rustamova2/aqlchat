@@ -99,6 +99,9 @@ async def receive_webhook(request: Request, db: Session = Depends(get_db)) -> di
     if not _signature_is_valid(raw_body, request.headers.get("X-Hub-Signature-256")):
         raise HTTPException(status_code=403, detail="invalid signature")
 
+    # TEMP DEBUG - remove once live comment-webhook delivery is confirmed working end to end.
+    logger.info("RAW WEBHOOK PAYLOAD: %s", raw_body.decode("utf-8", errors="replace"))
+
     payload = json.loads(raw_body)
 
     enqueued_ids: list[str] = []

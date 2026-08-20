@@ -32,6 +32,7 @@ class AutomationOut(BaseModel):
     is_active: bool
     media_ids: list[str]
     link: str | None
+    message: str | None
     public_reply_enabled: bool
     comments_7d: int
     dms_sent_7d: int

@@ -6,11 +6,18 @@ could do it themselves.
 
 Templates are fill-fields-only by design (see app/flows/templates.py's
 docstring): a merchant picks a preset and supplies a link (and, for
-"giveaway_keyword" only, a custom entry keyword) - the trigger keywords
-and reply copy always come from the preset, never free text from the
-merchant. This keeps the reply surface pre-vetted (no broken {link}
+presets with a "keyword" field, a custom trigger keyword) - the trigger
+keywords and reply copy always come from the preset, never free text from
+the merchant. This keeps the reply surface pre-vetted (no broken {link}
 placeholders, no moderation surface for arbitrary merchant-authored public
 comment replies) at the cost of flexibility the MVP doesn't need yet.
+
+"keyword_to_dm" is the one deliberate exception on the reply-copy side: it
+has a "message" field, and _build_response_config uses that merchant text
+verbatim as the private DM (still with {link} substitution). The public
+reply stays preset-fixed even there - only the private DM, never seen
+under the post, is merchant-authored, which is why the moderation-surface
+concern above doesn't block it.
 
 Auth is the real dashboard session (get_current_merchant), NOT the
 webhook_slug capability-token pattern used by /instagram/connect - these
@@ -101,11 +108,24 @@ def _resolve_keywords(template: dict, fields: dict[str, str]) -> list[str]:
     return template["keywords"]
 
 
+def _validate_message(value: str) -> str:
+    value = value.strip()
+    if not value or len(value) > 700:
+        raise HTTPException(status_code=400, detail="message must be 1-700 chars")
+    return value
+
+
 def _build_response_config(template: dict, fields: dict[str, str], media_ids: list[str], public_reply_enabled: bool) -> dict:
     for field in template["fields"]:
         if field["required"] and not (fields.get(field["key"]) or "").strip():
             raise HTTPException(status_code=400, detail=f"{field['key']} is required")
     link = _validate_link(fields["link"])
+    field_keys = {f["key"] for f in template["fields"]}
+    if "message" in field_keys:
+        message = _validate_message(fields["message"])
+        private_reply = {"uz": message, "ru": message}
+    else:
+        private_reply = template["private_reply"]
     # Public reply only exists as a concept on the comment channel - a
     # story-reply template's public_reply is always None (see
     # app/flows/templates.py), so this naturally no-ops there regardless
@@ -113,7 +133,7 @@ def _build_response_config(template: dict, fields: dict[str, str], media_ids: li
     wants_public_reply = public_reply_enabled and template["channel"] == "instagram_comment"
     return InstagramCommentResponse(
         link=link,
-        private_reply=template["private_reply"],
+        private_reply=private_reply,
         public_reply=template["public_reply"] if wants_public_reply else None,
         media_ids=media_ids,
     ).model_dump(exclude_none=True)
@@ -143,6 +163,11 @@ def _automation_out(flow: Flow, stats: dict, language: str) -> AutomationOut:
     comments_7d, dms_sent_7d = stats.get(flow.id, (0, 0))
     template = TEMPLATES.get(flow.template_key) if flow.template_key else None
     name = template["name"][language] if template else flow.name
+    # Only surface response_config's private_reply as an editable "message"
+    # for presets that actually collect one (keyword_to_dm) - other
+    # presets' private_reply is fixed preset copy, not merchant text.
+    has_message_field = bool(template) and any(f["key"] == "message" for f in template["fields"])
+    message = flow.response_config.get("private_reply", {}).get("uz") if has_message_field else None
     return AutomationOut(
         id=str(flow.id),
         template_key=flow.template_key,
@@ -152,6 +177,7 @@ def _automation_out(flow: Flow, stats: dict, language: str) -> AutomationOut:
         is_active=flow.is_active,
         media_ids=flow.response_config.get("media_ids") or [],
         link=flow.response_config.get("link"),
+        message=message,
         public_reply_enabled="public_reply" in flow.response_config,
         comments_7d=comments_7d,
         dms_sent_7d=dms_sent_7d,
@@ -260,7 +286,11 @@ def update_automation(
         custom = body.fields["keyword"].strip()
         if not custom:
             raise HTTPException(status_code=400, detail="keyword cannot be empty")
-        flow.trigger_value = json.dumps([custom])
+        # Same canonicalization as install (_resolve_keywords) - without
+        # this, editing an existing automation's keyword to Cyrillic-Uzbek
+        # text stores it unnormalized, so it would never match an inbound
+        # comment (already normalized to Latin before match_flow compares).
+        flow.trigger_value = json.dumps([normalize(custom).normalized_text])
 
     db.add(flow)
     db.commit()

@@ -11,10 +11,11 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
+import app.instagram.oauth as instagram_oauth_module
 import app.instagram.router as instagram_router_module
 from app.config import settings
 from app.instagram.client import InstagramClient
-from app.instagram.oauth import InstagramCredentials
+from app.instagram.oauth import InstagramCredentials, exchange_code
 from app.redis_client import get_redis
 
 CONNECTED_IG_USER_ID = 17841400000000003
@@ -118,3 +119,73 @@ def test_callback_rejects_ig_account_already_connected_elsewhere(
 
     assert response.status_code == 409
     assert routed_merchant.instagram_user_id is None
+
+
+# --- exchange_code's own id-namespace bug -----------------------------
+#
+# Regression coverage for a live bug: a merchant connected successfully,
+# but every webhook for their account logged "unknown ig user id ...
+# dropped" and comment-to-DM never fired. Root cause was here, not in
+# webhook routing - api.instagram.com/oauth/access_token's "user_id"
+# field is an app-scoped id, a different numeric namespace than the id
+# Meta stamps into entry[].id on webhook deliveries (confirmed against
+# Meta's Instagram Platform docs: graph.instagram.com/me's "id" field is
+# documented as "the app user's app-scoped ID", while its "user_id"
+# field - "the Instagram professional account ID" - is what shows up as
+# entry.id). exchange_code must use the latter.
+
+
+class _FakeHttpResponse:
+    def __init__(self, payload: dict):
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self) -> dict:
+        return self._payload
+
+
+TOKEN_EXCHANGE_APP_SCOPED_ID = "999900000000001"  # wrong namespace - must NOT end up stored
+WEBHOOK_ROUTING_ID = "17841457205391437"  # right namespace - must end up stored
+
+
+@pytest.fixture
+def stub_graph_calls(monkeypatch):
+    calls = []
+
+    def fake_post(url, data=None, timeout=None):
+        calls.append(("post", url, data))
+        assert url == instagram_oauth_module.SHORT_LIVED_TOKEN_URL
+        return _FakeHttpResponse({"access_token": "short-lived-token", "user_id": TOKEN_EXCHANGE_APP_SCOPED_ID})
+
+    def fake_get(url, params=None, timeout=None):
+        calls.append(("get", url, params))
+        if url == "https://graph.instagram.com/access_token":
+            assert params["access_token"] == "short-lived-token"
+            return _FakeHttpResponse({"access_token": "long-lived-token", "expires_in": 5183944})
+        if url.endswith("/me"):
+            assert params["access_token"] == "long-lived-token"  # fetched with the fresh token
+            return _FakeHttpResponse({"user_id": WEBHOOK_ROUTING_ID})
+        raise AssertionError(f"unexpected GET {url}")
+
+    monkeypatch.setattr(instagram_oauth_module.httpx, "post", fake_post)
+    monkeypatch.setattr(instagram_oauth_module.httpx, "get", fake_get)
+    return calls
+
+
+def test_exchange_code_uses_me_endpoint_id_not_token_response_user_id(monkeypatch, stub_graph_calls):
+    monkeypatch.setattr(settings, "instagram_app_id", "test-app-id")
+    monkeypatch.setattr(settings, "instagram_app_secret", "test-app-secret")
+    monkeypatch.setattr(settings, "instagram_graph_api_version", "v23.0")
+    monkeypatch.setattr(settings, "public_base_url", "https://aqlchat.example")
+
+    credentials = exchange_code("auth-code-42")
+
+    assert credentials.user_id == int(WEBHOOK_ROUTING_ID)
+    assert credentials.user_id != int(TOKEN_EXCHANGE_APP_SCOPED_ID)
+    assert credentials.access_token == "long-lived-token"
+
+    me_calls = [c for c in stub_graph_calls if c[1].endswith("/me")]
+    assert len(me_calls) == 1
+    assert me_calls[0][2] == {"fields": "user_id", "access_token": "long-lived-token"}

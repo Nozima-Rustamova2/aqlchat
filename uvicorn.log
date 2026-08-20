@@ -1,7 +1,274 @@
-INFO:     Started server process [26272]
+INFO:     Will watch for changes in these directories: ['D:\\aqlchat']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [26400] using WatchFiles
+INFO:     Started server process [17236]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:7039 - "GET /docs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:9651 - "GET /docs HTTP/1.1" 200 OK
-INFO:     188.113.217.141:0 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8817 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1087 - "GET /dashboard/agents/f41fb4f3-ec08-403d-bb65-fcc9bb2b12e3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1087 - "GET /static/i18n.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1087 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1087 - "GET /agents/f41fb4f3-ec08-403d-bb65-fcc9bb2b12e3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1087 - "POST /agents/f41fb4f3-ec08-403d-bb65-fcc9bb2b12e3/test-chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4555 - "POST /agents/f41fb4f3-ec08-403d-bb65-fcc9bb2b12e3/test-chat HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\aqlchat\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 2683, in app
+    await route.handle(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 1773, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 1264, in handle
+    await app(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 690, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 346, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2596, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1029, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\app\agents\router.py", line 232, in test_chat
+    reply = knowledge.generate_grounded_reply(agent, body.message)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\app\agents\knowledge.py", line 161, in generate_grounded_reply
+    response = _get_client().models.generate_content(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\models.py", line 6549, in generate_content
+    response = self._generate_content(
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\models.py", line 4977, in _generate_content
+    response = self._api_client.request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\_api_client.py", line 1650, in request
+    response = self._request(http_request, http_options, stream=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\_api_client.py", line 1443, in _request
+    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 470, in __call__
+    do = self.iter(retry_state=retry_state)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 371, in iter
+    result = action(retry_state)
+             ^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 413, in exc_check
+    raise retry_exc.reraise()
+          ^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 184, in reraise
+    raise self.last_attempt.result()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Asus\AppData\Roaming\uv\python\cpython-3.12.12-windows-x86_64-none\Lib\concurrent\futures\_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Asus\AppData\Roaming\uv\python\cpython-3.12.12-windows-x86_64-none\Lib\concurrent\futures\_base.py", line 401, in __get_result
+    raise self._exception
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 473, in __call__
+    result = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\_api_client.py", line 1420, in _request_once
+    errors.APIError.raise_for_response(response)
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\errors.py", line 155, in raise_for_response
+    cls.raise_error(response.status_code, response_json, response)
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\errors.py", line 186, in raise_error
+    raise ServerError(status_code, response_json, response)
+google.genai.errors.ServerError: 504 DEADLINE_EXCEEDED. {'error': {'code': 504, 'message': 'Deadline expired before operation could complete.', 'status': 'DEADLINE_EXCEEDED'}}
+INFO:     127.0.0.1:11633 - "GET /dashboard/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11633 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11633 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11633 - "DELETE /agents/f41fb4f3-ec08-403d-bb65-fcc9bb2b12e3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11633 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11633 - "POST /auth/logout HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11633 - "GET /signup HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1424 - "POST /auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:1424 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1424 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1424 - "GET /static/i18n.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:1424 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1424 - "GET /automations/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14965 - "GET /automations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14965 - "GET /dashboard/automations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14965 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14965 - "GET /automations/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14965 - "GET /automations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4236 - "DELETE /automations/8e72e56c-970a-43dd-bbc7-1004a3fdfdeb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4236 - "GET /automations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2795 - "GET /instagram/media HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2795 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:6360 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:10690 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:10690 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:10091 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:1341 - "GET /instagram/media HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1341 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:1341 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:1341 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:1341 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:1341 - "POST /automations HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:4236 - "POST /automations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4236 - "GET /automations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:12898 - "GET /dashboard/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:12898 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:12898 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11436 - "POST /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11436 - "POST /agents/4c0f005b-dd7d-436f-8fea-a6d802657dac/telegram/connect HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11436 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11436 - "GET /dashboard/agents/4c0f005b-dd7d-436f-8fea-a6d802657dac HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11436 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11436 - "GET /agents/4c0f005b-dd7d-436f-8fea-a6d802657dac HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9529 - "POST /agents/4c0f005b-dd7d-436f-8fea-a6d802657dac/test-chat HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\aqlchat\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 2683, in app
+    await route.handle(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 1773, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 1264, in handle
+    await app(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 690, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\fastapi\routing.py", line 346, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2596, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1029, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\app\agents\router.py", line 232, in test_chat
+    reply = knowledge.generate_grounded_reply(agent, body.message)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\app\agents\knowledge.py", line 161, in generate_grounded_reply
+    response = _get_client().models.generate_content(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\models.py", line 6549, in generate_content
+    response = self._generate_content(
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\models.py", line 4977, in _generate_content
+    response = self._api_client.request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\_api_client.py", line 1650, in request
+    response = self._request(http_request, http_options, stream=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\_api_client.py", line 1443, in _request
+    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 470, in __call__
+    do = self.iter(retry_state=retry_state)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 371, in iter
+    result = action(retry_state)
+             ^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 413, in exc_check
+    raise retry_exc.reraise()
+          ^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 184, in reraise
+    raise self.last_attempt.result()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Asus\AppData\Roaming\uv\python\cpython-3.12.12-windows-x86_64-none\Lib\concurrent\futures\_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Asus\AppData\Roaming\uv\python\cpython-3.12.12-windows-x86_64-none\Lib\concurrent\futures\_base.py", line 401, in __get_result
+    raise self._exception
+  File "D:\aqlchat\.venv\Lib\site-packages\tenacity\__init__.py", line 473, in __call__
+    result = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\_api_client.py", line 1420, in _request_once
+    errors.APIError.raise_for_response(response)
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\errors.py", line 155, in raise_for_response
+    cls.raise_error(response.status_code, response_json, response)
+  File "D:\aqlchat\.venv\Lib\site-packages\google\genai\errors.py", line 186, in raise_error
+    raise ServerError(status_code, response_json, response)
+google.genai.errors.ServerError: 504 DEADLINE_EXCEEDED. {'error': {'code': 504, 'message': 'Deadline expired before operation could complete.', 'status': 'DEADLINE_EXCEEDED'}}
+INFO:     127.0.0.1:11553 - "PATCH /agents/4c0f005b-dd7d-436f-8fea-a6d802657dac HTTP/1.1" 200 OK

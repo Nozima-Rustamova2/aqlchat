@@ -33,3 +33,16 @@ def dashboard_settings_page() -> str:
 @router.get("/dashboard/automations", response_class=HTMLResponse)
 def dashboard_automations_page() -> str:
     return (_TEMPLATES_DIR / "dashboard_automations.html").read_text(encoding="utf-8")
+
+
+@router.get("/dashboard/agents", response_class=HTMLResponse)
+def dashboard_agents_page() -> str:
+    return (_TEMPLATES_DIR / "dashboard_agents.html").read_text(encoding="utf-8")
+
+
+@router.get("/dashboard/agents/{agent_id}", response_class=HTMLResponse)
+def dashboard_agent_workspace_page(agent_id: str) -> str:
+    # agent_id is unused server-side - the page re-derives it client-side
+    # from window.location.pathname for its own /agents/{id} API calls,
+    # same client-driven pattern as dashboard_page()'s auth gate above.
+    return (_TEMPLATES_DIR / "dashboard_agent_workspace.html").read_text(encoding="utf-8")
